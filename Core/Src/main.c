@@ -71,27 +71,31 @@ int main(void)
       {
         rx_string_buffer[rx_len] = '\0'; // Kết thúc chuỗi C-String
 
-        int temp = 0, hum = 0;
-        // Phân tích chuỗi định dạng nhiệt độ độ ẩm: "Term: XX C, Hum: YY%"
-        if (sscanf((char *)rx_string_buffer, "Term: %d C, Hum: %d%%", &temp, &hum) == 2) {
+        int dist_int = 0, dist_dec = 0;
+        // Phân tích chuỗi định dạng khoảng cách: "Dist: XXX.X cm"
+        // Dùng %d.%d thay vì %f để tránh giới hạn sscanf float của newlib-nano
+        if (sscanf((char *)rx_string_buffer, "Dist: %d.%d cm", &dist_int, &dist_dec) == 2) {
           char lcd_row0[17];
           char lcd_row1[17];
-          snprintf(lcd_row0, sizeof(lcd_row0), "Temp: %d C      ", temp);
-          snprintf(lcd_row1, sizeof(lcd_row1), "Hum:  %d %%      ", hum);
-          
+
+          // Dòng 1: "Φ 00.0 cm  " - khoảng cách cm
+          snprintf(lcd_row0, sizeof(lcd_row0), "Dist: %d.%d cm  ", dist_int, dist_dec);
+          // Dòng 2: khoảng cách mm (dist_int * 10 + dist_dec)
+          snprintf(lcd_row1, sizeof(lcd_row1), "     %d mm      ", dist_int * 10 + dist_dec);
+
           lcd_goto_xy(0, 0);
           lcd_send_string(lcd_row0);
           lcd_goto_xy(1, 0);
           lcd_send_string(lcd_row1);
-        } 
-        else 
+        }
+        else
         {
-          // Nếu nhận chuỗi khác (như "DHT11 Read Err" hay "System Woke Up")
+          // Nếu nhận chuỗi lỗi (như "HC-SR04 Err") hoặc định dạng không hợp lệ
           char lcd_row0[17];
           snprintf(lcd_row0, sizeof(lcd_row0), "%-16s", (char *)rx_string_buffer);
           lcd_goto_xy(0, 0);
           lcd_send_string(lcd_row0);
-          
+
           lcd_goto_xy(1, 0);
           lcd_send_string("Waiting data... ");
         }
