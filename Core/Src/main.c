@@ -101,6 +101,7 @@ void USART1_RxEventCallback(uint8_t received_data)
     if (usart_rx_idx < USART_RX_BUF_SIZE - 1)
     {
       usart_rx_buf[usart_rx_idx++] = received_data;
+      usart_msg_ready = 1;
     }
   }
 }
