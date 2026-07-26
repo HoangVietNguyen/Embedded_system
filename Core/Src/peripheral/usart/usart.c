@@ -114,15 +114,15 @@ uint8_t USART1_Get_Received_Byte(void)
     return usart1_rx_byte;
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-        usart1_rx_flag = 1;
-        USART1_RxEventCallback(usart1_rx_byte);
-        USART1_Start_Receive_IT();
-    }
-}
+// void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+// {
+//     if (huart->Instance == USART1)
+//     {
+//         usart1_rx_flag = 1;
+//         USART1_RxEventCallback(usart1_rx_byte);
+//         USART1_Start_Receive_IT();
+//     }
+// }
 
 __weak void USART1_RxEventCallback(uint8_t received_data)
 {

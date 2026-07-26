@@ -21,6 +21,14 @@ static volatile uint8_t usart_rx_buf[USART_RX_BUF_SIZE];
 static volatile uint8_t usart_rx_idx    = 0;
 static volatile uint8_t usart_msg_ready = 0;
 
+#define RX_BUFFER_SIZE 64
+
+uint8_t rx_data;                         // Biến tạm chứa 1 byte vừa nhận
+char rx_buffer[RX_BUFFER_SIZE];          // Mảng chứa cả chuỗi "Dist: %d.%d cm\n"
+uint8_t rx_index = 0;                    // Con trỏ vị trí mảng
+volatile uint8_t string_complete = 0;
+uint8_t is_capturing = 0; // Cờ đánh dấu đã tìm thấy đầu chuỗi chưa
+
 int main(void)
 {
   HAL_Init();
@@ -44,42 +52,30 @@ int main(void)
 
   while (1)
   {
-    // Chờ cho đến khi nhận đủ một dòng dữ liệu (kết thúc bằng '\n')
-    if (usart_msg_ready)
-    {
-      usart_msg_ready = 0;
+    if (string_complete) {
+      int dist_int = 0;  // Phần nguyên (ví dụ: 12)
+      int dist_dec = 0;  // Phần thập phân (ví dụ: 5)
 
-      int dist_int = 0, dist_dec = 0;
+      // Bóc tách dữ liệu từ chuỗi rx_buffer
+      // Hàm sscanf sẽ tìm đúng định dạng "Dist: %d.%d cm" để trích xuất 2 số
+      int parsed_items = sscanf(rx_buffer, "Dist: %d.%d cm", &dist_int, &dist_dec);
 
-      // Phân tích chuỗi "Dist: XXX.X cm"
-      if (sscanf((char *)usart_rx_buf, "Dist: %d.%d cm", &dist_int, &dist_dec) == 2)
-      {
-        char lcd_row0[17];
-        char lcd_row1[17];
+      if (parsed_items == 2) {
+        // Bóc tách thành công! Ông đã có 2 giá trị dist_int và dist_dec
+        // Ví dụ: In ra màn hình TFT hoặc xử lý logic tiếp theo tại đây
 
-        // Dòng 0: khoảng cách cm — ví dụ "Dist: 123.4 cm  "
-        snprintf(lcd_row0, sizeof(lcd_row0), "Dist: %d.%d cm  ", dist_int, dist_dec);
-        // Dòng 1: khoảng cách mm — ví dụ "     1234 mm    "
-        snprintf(lcd_row1, sizeof(lcd_row1), "     %d mm      ", dist_int * 10 + dist_dec);
-
-        lcd_goto_xy(0, 0);
-        lcd_send_string(lcd_row0);
+        char lcd_buffer[20];
+        sprintf(lcd_buffer, "Distance: %d.%d cm", dist_int, dist_dec);
         lcd_goto_xy(1, 0);
-        lcd_send_string(lcd_row1);
+        lcd_send_string(lcd_buffer);
       }
-      else
-      {
-        // Nhận được chuỗi lỗi hoặc định dạng không hợp lệ
-        char lcd_row0[17];
-        snprintf(lcd_row0, sizeof(lcd_row0), "%-16s", (char *)usart_rx_buf);
-        lcd_goto_xy(0, 0);
-        lcd_send_string(lcd_row0);
-        lcd_goto_xy(1, 0);
-        lcd_send_string("Waiting data... ");
-      }
+
+      // Dọn dẹp cờ và bộ đệm để đón chuỗi mới
+      rx_index = 0;
+      string_complete = 0;
     }
 
-    HAL_Delay(10); // Giảm tải CPU trong vòng lặp chờ
+    /* USER CODE END WHILE */
   }
 }
 
@@ -87,24 +83,34 @@ int main(void)
 // USART1 Receive Callback — được gọi mỗi khi nhận 1 byte qua PA10 (RX)
 // Tích lũy byte vào buffer; khi gặp '\n' thì đánh dấu tin nhắn đã hoàn chỉnh
 // ============================================================================
-void USART1_RxEventCallback(uint8_t received_data)
-{
-  if (received_data == '\n')
-  {
-    // Kết thúc chuỗi — null-terminate và bật cờ xử lý
-    usart_rx_buf[usart_rx_idx] = '\0';
-    usart_msg_ready = 1;
-    usart_rx_idx    = 0;
-  }
-  else if (received_data != '\r') // Bỏ qua '\r' nếu sender gửi "\r\n"
-  {
-    if (usart_rx_idx < USART_RX_BUF_SIZE - 1)
-    {
-      usart_rx_buf[usart_rx_idx++] = received_data;
-      usart_msg_ready = 1;
+/* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART1) {
+    // Nếu bắt gặp ký tự bắt đầu 'D' -> Bắt đầu ghi vào index 0
+    if (rx_data == 'D') {
+      is_capturing = 1;
+      rx_index = 0;
     }
+
+    // Nếu đang trong tiến trình bắt chuỗi
+    if (is_capturing) {
+      rx_buffer[rx_index] = rx_data;
+
+      // Gặp ký tự xuống dòng '\n' -> Chốt sổ!
+      if (rx_data == '\n') {
+        rx_buffer[rx_index] = '\0'; // Ghi đè '\n' thành '\0' luôn
+        string_complete = 1;        // Báo cho loop chính biết đã xong
+        is_capturing = 0;           // Tắt cờ bắt
+      } else {
+        rx_index++;
+      }
+    }
+
+    // Kích hoạt lại ngắt nhận
+    HAL_UART_Receive_IT(&huart1, &rx_data, 1);
   }
 }
+/* USER CODE END 4 */
 
 void Error_Handler(void)
 {
