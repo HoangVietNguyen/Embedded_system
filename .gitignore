@@ -1,7 +1,12 @@
-# =========================
-# Build output
-# =========================
+# =============================================================
+# STM32 CMake Project - .gitignore
+# =============================================================
+
+# CMake build output
 build/
+cmake-build-*/
+
+# Compiled binaries & object files
 *.elf
 *.bin
 *.hex
@@ -12,25 +17,30 @@ build/
 *.a
 *.d
 
-# =========================
-# IDE - CLion / JetBrains
-# =========================
-.idea/
-cmake-build-*/
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.ninja
+.ninja_deps
+.ninja_log
 
-# =========================
+# IDE - CLion / JetBrains
+.idea/
+*.iws
+*.iml
+*.ipr
+
 # IDE - VS Code
-# =========================
 .vscode/
 
-# =========================
 # macOS system files
-# =========================
 .DS_Store
+Thumbs.db
 *.swp
-*~
 
-# =========================
 # STM32CubeMX backup files
-# =========================
 *.bak
+*.orig
+*~
