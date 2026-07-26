@@ -14,9 +14,9 @@
 #include "sensor_manager/hc-sr04-driver/hc_sr04.h"
 
 #define HC_SR04_TRIG_PORT GPIOB
-#define HC_SR04_TRIG_PIN  GPIO_PIN_4
+#define HC_SR04_TRIG_PIN  GPIO_PIN_6
 #define HC_SR04_ECHO_PORT GPIOB
-#define HC_SR04_ECHO_PIN  GPIO_PIN_5
+#define HC_SR04_ECHO_PIN  GPIO_PIN_7
 
 int main(void)
 {
