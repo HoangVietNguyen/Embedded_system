@@ -57,8 +57,10 @@ int main(void)
     char payload[32];
 
     if (HC_SR04_Read(&distance) == HC_SR04_OK) {
-      // Format: "Dist: 123.4 cm"
-      snprintf(payload, sizeof(payload), "Dist: %.1f cm", distance.distance_cm);
+      // Dùng %d.%d thay %.1f để tránh giới hạn printf float của newlib-nano
+      int dist_int = (int)distance.distance_cm;
+      int dist_dec = (int)((distance.distance_cm - dist_int) * 10);
+      snprintf(payload, sizeof(payload), "Dist: %d.%d cm\n", dist_int, dist_dec);
     } else {
       snprintf(payload, sizeof(payload), "HC-SR04 Err");
     }
