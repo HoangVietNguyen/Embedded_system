@@ -1,6 +1,7 @@
 #include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "lora_transmit/lora_config/lora_config.h"
 #include "lora_transmit/lora_send/lora_send.h"
@@ -61,12 +62,13 @@ int main(void)
       int dist_int = (int)distance.distance_cm;
       int dist_dec = (int)((distance.distance_cm - dist_int) * 10);
       snprintf(payload, sizeof(payload), "Dist: %d.%d cm\n", dist_int, dist_dec);
+
     } else {
       snprintf(payload, sizeof(payload), "HC-SR04 Err");
     }
 
     if (distance.distance_cm < 5) {
-      LoRa_Send_String(payload);
+      HAL_UART_Transmit(&huart1, payload, strlen(payload), HAL_MAX_DELAY);
       HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
       HAL_Delay(100);
       HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
