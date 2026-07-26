@@ -34,20 +34,20 @@ int main(void)
 
   HAL_DBGMCU_EnableDBGStopMode(); // Debugmodul erhalten als Processor geschlaft hat
 
-  LoRa_Send_Init();
-  LoRa_Config_Status config_status = LoRa_Configure_Module(LORA_ADDRESS, LORA_CHANNEL);
-  if (config_status == LORA_CONFIG_OK) {
-    for (int i = 0; i < 3; i++) {
-      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-      HAL_Delay(100);
-      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
-      HAL_Delay(100);
-    }
-  } else {
-    HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-    HAL_Delay(2000);
-    HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
-  }
+  // LoRa_Send_Init();
+  // LoRa_Config_Status config_status = LoRa_Configure_Module(LORA_ADDRESS, LORA_CHANNEL);
+  // if (config_status == LORA_CONFIG_OK) {
+  //   for (int i = 0; i < 3; i++) {
+  //     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+  //     HAL_Delay(100);
+  //     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+  //     HAL_Delay(100);
+  //   }
+  // } else {
+  //   HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+  //   HAL_Delay(2000);
+  //   HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+  // }
 
   HC_SR04_Init(HC_SR04_TRIG_PORT, HC_SR04_TRIG_PIN,
                HC_SR04_ECHO_PORT, HC_SR04_ECHO_PIN);
