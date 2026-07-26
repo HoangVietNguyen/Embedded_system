@@ -53,6 +53,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/Src/peripheral/i2c/lcd_config/lcd_config.h
         Core/Src/sensor_manager/dht11_driver/dht11.c
         Core/Src/sensor_manager/dht11_driver/dht11.h
+        Core/Src/sensor_manager/hc-sr04-driver/hc_sr04.c
+        Core/Src/sensor_manager/hc-sr04-driver/hc_sr04.h
         Core/Src/peripheral/adc/adc.c
         Core/Src/peripheral/adc/adc.h
         Core/Src/peripheral/usart/usart.c
