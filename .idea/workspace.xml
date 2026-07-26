@@ -32,11 +32,7 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="947f3cd2-f481-41a0-9ecd-e9e3c2b822a5" name="Changes" comment="receive">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" afterDir="false" />
+    <list default="true" id="947f3cd2-f481-41a0-9ecd-e9e3c2b822a5" name="Changes" comment="send">
       <change beforePath="$PROJECT_DIR$/Core/Src/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/main.c" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -139,6 +135,11 @@
   </component>
   <component name="RunManager" selected="OpenOCD Download &amp; Run.Embedded_system">
     <configuration name="STM32_Drivers" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Embedded_system" TARGET_NAME="Embedded_system" CONFIG_NAME="Debug - Debug" RUN_TARGET_PROJECT_NAME="Embedded_system" RUN_TARGET_NAME="Embedded_system">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -362,9 +363,9 @@
           <option name="timeStamp" value="258" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c</url>
-          <line>55</line>
-          <option name="timeStamp" value="349" />
+          <url>file://$PROJECT_DIR$/Core/Src/main.c</url>
+          <line>66</line>
+          <option name="timeStamp" value="356" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

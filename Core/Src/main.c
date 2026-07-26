@@ -11,10 +11,12 @@
 #include "peripheral/i2c/i2c/i2c.h"
 #include "peripheral/rtc/rtc.h"
 #include "peripheral/usart/usart.h"
-#include "sensor_manager/dht11_driver/dht11.h"
+#include "sensor_manager/hc-sr04-driver/hc_sr04.h"
 
-#define DHT11_PORT GPIOA
-#define DHT11_PIN GPIO_PIN_12
+#define HC_SR04_TRIG_PORT GPIOB
+#define HC_SR04_TRIG_PIN  GPIO_PIN_4
+#define HC_SR04_ECHO_PORT GPIOB
+#define HC_SR04_ECHO_PIN  GPIO_PIN_5
 
 int main(void)
 {
@@ -46,28 +48,30 @@ int main(void)
     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
   }
 
-  DHT11_Init(DHT11_PORT, DHT11_PIN);
-  HAL_Delay(1500);
+  HC_SR04_Init(HC_SR04_TRIG_PORT, HC_SR04_TRIG_PIN,
+               HC_SR04_ECHO_PORT, HC_SR04_ECHO_PIN);
 
   while (1)
   {
-    DHT11_Data data;
+    HC_SR04_Data distance;
     char payload[32];
 
-    if (DHT11_Read(&data) == DHT11_OK) {
-      snprintf(payload, sizeof(payload), "Term: %d C, Hum: %d%%", data.temperature, data.humidity);
+    if (HC_SR04_Read(&distance) == HC_SR04_OK) {
+      // Format: "Dist: 123.4 cm"
+      snprintf(payload, sizeof(payload), "Dist: %.1f cm", distance.distance_cm);
     } else {
-      snprintf(payload, sizeof(payload), "DHT11 Read Err");
+      snprintf(payload, sizeof(payload), "HC-SR04 Err");
     }
 
-    // USART1_Send_String(payload);
-    LoRa_Send_String(payload);
+    if (distance.distance_cm < 5) {
+      LoRa_Send_String(payload);
+      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+      HAL_Delay(100);
+      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+    }
 
-    HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-    HAL_Delay(100);
-    HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
-
-    HAL_Delay(2000);
+    // Wait 60ms before next measurement (HC-SR04 minimum cycle time)
+    HAL_Delay(60);
   }
 
 }
