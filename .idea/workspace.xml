@@ -32,19 +32,12 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="947f3cd2-f481-41a0-9ecd-e9e3c2b822a5" name="Changes" comment="transparent">
-      <change afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.c" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.h" afterDir="false" />
+    <list default="true" id="947f3cd2-f481-41a0-9ecd-e9e3c2b822a5" name="Changes" comment="receive">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Inc/main.h" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Inc/main.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_receive/lora_receive.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_receive/lora_receive.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_receive/lora_receive.h" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_receive/lora_receive.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.h" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_config/lora_config.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Core/Src/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/main.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/peripheral/gpio/gpio.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/peripheral/gpio/gpio.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/peripheral/rtc/rtc.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/peripheral/rtc/rtc.c" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Src/peripheral/rtc/rtc.h" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/peripheral/rtc/rtc.h" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -56,7 +49,7 @@
     <option name="formatViaClangd" value="false" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="983" />
+    <option name="cachedIndexableFilesCount" value="984" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug - Debug" />
   <component name="Git.Settings">
@@ -105,37 +98,37 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "CMake Application.Embedded_system.executor": "Run",
-    "CMake Application.MatrixLEDSPI.executor": "Debug",
-    "CMake Application.STM32_Drivers.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "OpenOCD Download & Run.Embedded_system.executor": "Run",
-    "OpenOCD Download & Run.MatrixLEDSPI.executor": "Debug",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.RadMigrateCodeStyle": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "feature/LoRa__sendData__USART",
-    "last_opened_file_path": "/Users/nguyenhoangviet/Desktop/STM32Project/Embedded_system",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.first.attach.projects": "true",
-    "settings.editor.selected.configurable": "CPPToolchains",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;CMake Application.Embedded_system.executor&quot;: &quot;Run&quot;,
+    &quot;CMake Application.MatrixLEDSPI.executor&quot;: &quot;Debug&quot;,
+    &quot;CMake Application.STM32_Drivers.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;OpenOCD Download &amp; Run.Embedded_system.executor&quot;: &quot;Debug&quot;,
+    &quot;OpenOCD Download &amp; Run.MatrixLEDSPI.executor&quot;: &quot;Debug&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/LoRa__sendData__USART&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/nguyenhoangviet/Desktop/STM32Project/Embedded_system&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;CPPToolchains&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/Core/Src/tetris_factory" />
@@ -145,17 +138,12 @@
     </key>
   </component>
   <component name="RunManager" selected="OpenOCD Download &amp; Run.Embedded_system">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="STM32_Drivers" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Embedded_system" TARGET_NAME="Embedded_system" CONFIG_NAME="Debug - Debug" RUN_TARGET_PROJECT_NAME="Embedded_system" RUN_TARGET_NAME="Embedded_system">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Embedded_system" type="com.jetbrains.cidr.embedded.openocd.conf.type" factoryName="com.jetbrains.cidr.embedded.openocd.conf.factory" nameIsGenerated="true" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Embedded_system" TARGET_NAME="Embedded_system" CONFIG_NAME="Debug - Debug" version="1" RUN_PATH="$PROJECT_DIR$/build/Debug/Embedded_system.elf">
+    <configuration name="Embedded_system" type="com.jetbrains.cidr.embedded.openocd.conf.type" factoryName="com.jetbrains.cidr.embedded.openocd.conf.factory" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Embedded_system" TARGET_NAME="Embedded_system" CONFIG_NAME="Debug - Debug" version="1" RUN_PATH="$PROJECT_DIR$/build/Debug/Embedded_system.elf">
       <openocd version="1" gdb-port="3333" telnet-port="4444" board-config="$PROJECT_DIR$/../../local_openocd.cfg" reset-type="INIT" download-type="UPDATED_ONLY">
         <debugger kind="GDB" isBundled="true" />
       </openocd>
@@ -198,6 +186,7 @@
       <workItem from="1784354907765" duration="601000" />
       <workItem from="1784364398038" duration="19252000" />
       <workItem from="1784450933372" duration="4581000" />
+      <workItem from="1784639489011" duration="878000" />
     </task>
     <task id="LOCAL-00001" summary="navigator code">
       <option name="closed" value="true" />
@@ -371,6 +360,11 @@
           <url>file://$PROJECT_DIR$/Core/Src/sensor_manager/dht11_driver/dht11.c</url>
           <line>79</line>
           <option name="timeStamp" value="258" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c</url>
+          <line>55</line>
+          <option name="timeStamp" value="349" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

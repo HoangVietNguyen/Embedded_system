@@ -67,7 +67,7 @@ int main(void)
     HAL_Delay(100);
     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
 
-    RTC_Sleep_Seconds(2);
+    HAL_Delay(2000);
   }
 
 }

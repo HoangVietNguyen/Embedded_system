@@ -29,7 +29,8 @@ LoRa_Send_Status LoRa_Send_String(char *str)
         return LORA_SEND_ERROR_ARGUMENT;
     }
 
-    return LoRa_Send_Data((uint8_t *)str, strlen(str));
+    // Gửi định địa chỉ tới bên nhận (Address: 0x08, Channel: 0x17)
+    return LoRa_Send_Fixed_Data(0x08, 0x17, (uint8_t *)str, strlen(str));
 }
 
 LoRa_Send_Status LoRa_Send_Fixed_Data(uint8_t address, uint8_t channel, uint8_t *data, uint16_t size)

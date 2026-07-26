@@ -8,8 +8,8 @@
 #include "stm32f1xx_hal.h"
 #include "stdint.h"
 
-// Địa chỉ mặc định cho thiết bị
-#define LORA_ADDRESS        0x000FU  // Ví dụ 15
+// Địa chỉ mặc định cho thiết bị gửi
+#define LORA_ADDRESS        0x0000U  
 #define LORA_CHANNEL        0x17U    // Channel 23 (433 MHz)
 
 typedef enum {
