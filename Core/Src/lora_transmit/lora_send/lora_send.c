@@ -6,10 +6,6 @@
 #include "peripheral/usart/usart.h"
 #include "string.h"
 
-void LoRa_Send_Init(void)
-{
-}
-
 LoRa_Send_Status LoRa_Send_Data(uint8_t *data, uint16_t size)
 {
     if (data == NULL || size == 0) {

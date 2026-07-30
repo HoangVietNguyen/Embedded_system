@@ -12,12 +12,19 @@
 #include "peripheral/i2c/i2c/i2c.h"
 #include "peripheral/rtc/rtc.h"
 #include "peripheral/usart/usart.h"
+#include "sensor_manager/dht11_driver/dht11.h"
 #include "sensor_manager/hc-sr04-driver/hc_sr04.h"
 
 #define HC_SR04_TRIG_PORT GPIOB
 #define HC_SR04_TRIG_PIN  GPIO_PIN_6
 #define HC_SR04_ECHO_PORT GPIOB
 #define HC_SR04_ECHO_PIN  GPIO_PIN_7
+
+#define DHT11_PORT GPIOB
+#define DHT11_PIN  GPIO_PIN_8
+
+#define TARGET_LORA_CHANNEL  0x17U
+#define TARGET_LORA_ADDRESS  0x08U
 
 int main(void)
 {
@@ -34,48 +41,87 @@ int main(void)
 
   HAL_DBGMCU_EnableDBGStopMode(); // Debugmodul erhalten als Processor geschlaft hat
 
-  // LoRa_Send_Init();
-  // LoRa_Config_Status config_status = LoRa_Configure_Module(LORA_ADDRESS, LORA_CHANNEL);
-  // if (config_status == LORA_CONFIG_OK) {
-  //   for (int i = 0; i < 3; i++) {
-  //     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-  //     HAL_Delay(100);
-  //     HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
-  //     HAL_Delay(100);
-  //   }
-  // } else {
-  //   HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-  //   HAL_Delay(2000);
-  //   HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
-  // }
-
   HC_SR04_Init(HC_SR04_TRIG_PORT, HC_SR04_TRIG_PIN,
                HC_SR04_ECHO_PORT, HC_SR04_ECHO_PIN);
+
+  DHT11_Init(DHT11_PORT, DHT11_PIN);
 
   while (1)
   {
     HC_SR04_Data distance;
-    char payload[32];
+    char distance_payload[32];
+
+    DHT11_Data dht11;
+    char dht11_payload_temp[32];
+    char dht11_payload_huminity[32];
 
     if (HC_SR04_Read(&distance) == HC_SR04_OK) {
       // Dùng %d.%d thay %.1f để tránh giới hạn printf float của newlib-nano
-      int dist_int = (int)distance.distance_cm;
-      int dist_dec = (int)((distance.distance_cm - dist_int) * 10);
-      snprintf(payload, sizeof(payload), "Dist: %d.%d cm\n", dist_int, dist_dec);
+      uint8_t dist_int = (int)distance.distance_cm;
+      uint8_t dist_dec = (int)((distance.distance_cm - dist_int) * 10);
+      snprintf(distance_payload, sizeof(distance_payload), "Dist: %d.%d cm\n", dist_int, dist_dec);
 
     } else {
-      snprintf(payload, sizeof(payload), "HC-SR04 Err");
+      snprintf(distance_payload, sizeof(distance_payload), "HC-SR04 Err");
     }
 
     if (distance.distance_cm < 5) {
-      HAL_UART_Transmit(&huart1, payload, strlen(payload), HAL_MAX_DELAY);
-      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
-      HAL_Delay(100);
-      HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+      // HAL_UART_Transmit(&huart1, distance_payload, strlen(distance_payload), HAL_MAX_DELAY);
+      // HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+      // HAL_Delay(50);
+      // HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+
+      LoRa_Send_Status lora_send_status =
+        LoRa_Send_Fixed_Data(
+          TARGET_LORA_ADDRESS,
+          TARGET_LORA_CHANNEL,
+          (uint8_t *)distance_payload,
+          strlen(distance_payload)
+          );
+      if (lora_send_status == LORA_SEND_OK) {
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+        HAL_Delay(50);
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+      }
     }
 
-    // Wait 60ms before next measurement (HC-SR04 minimum cycle time)
-    HAL_Delay(60);
+    DHT11_Status dht_status = DHT11_Read(&dht11);
+    if (dht_status == DHT11_OK) {
+      LoRa_Send_Status lora_send_status = LORA_SEND_OK;
+      uint8_t temperature = dht11.temperature;
+      snprintf(dht11_payload_temp, sizeof(dht11_payload_temp), "Temp: %d", (int) temperature);
+       lora_send_status = LoRa_Send_Fixed_Data(
+         TARGET_LORA_ADDRESS,
+         TARGET_LORA_CHANNEL,
+         (uint8_t *)dht11_payload_temp,
+         strlen(dht11_payload_temp)
+         );
+      if (lora_send_status == LORA_SEND_OK) {
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+        HAL_Delay(50);
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+      }
+
+      HAL_Delay(500);
+
+      uint8_t humidity = dht11.humidity;
+      snprintf(dht11_payload_huminity, sizeof(dht11_payload_huminity), "Humidity: %d", (int) humidity);
+      lora_send_status =
+      LoRa_Send_Fixed_Data(
+        TARGET_LORA_ADDRESS,
+        TARGET_LORA_CHANNEL,
+        (uint8_t *)dht11_payload_huminity,
+        strlen(dht11_payload_huminity)
+        );
+      if (lora_send_status == LORA_SEND_OK) {
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_SET);
+        HAL_Delay(50);
+        HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin, GPIO_PIN_RESET);
+      }
+    }
+
+    // Put processor into STOP mode for 1 second using RTC alarm wakeup
+    // RTC_Sleep_Seconds(60);
   }
 
 }

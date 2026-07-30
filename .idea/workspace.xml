@@ -6,6 +6,7 @@
   <component name="BackendCodeEditorMiscSettings">
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
     <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
+    <option name="/Default/Housekeeping/LiveTemplatesHousekeeping/HotspotSessionHintIsShown/@EntryValue" value="true" type="bool" />
     <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
   </component>
   <component name="CMakePresetLoader">{
@@ -33,6 +34,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="947f3cd2-f481-41a0-9ecd-e9e3c2b822a5" name="Changes" comment="send">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Core/Src/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Src/main.c" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -45,13 +48,13 @@
     <option name="formatViaClangd" value="false" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="984" />
+    <option name="cachedIndexableFilesCount" value="973" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug - Debug" />
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="feature/LoRa_sendData_USART" />
+        <entry key="$PROJECT_DIR$" value="feature/LoRa_receiveData_USART" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -101,7 +104,7 @@
     &quot;CMake Application.MatrixLEDSPI.executor&quot;: &quot;Debug&quot;,
     &quot;CMake Application.STM32_Drivers.executor&quot;: &quot;Run&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;OpenOCD Download &amp; Run.Embedded_system.executor&quot;: &quot;Debug&quot;,
+    &quot;OpenOCD Download &amp; Run.Embedded_system.executor&quot;: &quot;Run&quot;,
     &quot;OpenOCD Download &amp; Run.MatrixLEDSPI.executor&quot;: &quot;Debug&quot;,
     &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
@@ -184,6 +187,8 @@
       <workItem from="1784364398038" duration="19252000" />
       <workItem from="1784450933372" duration="4581000" />
       <workItem from="1784639489011" duration="878000" />
+      <workItem from="1785403788109" duration="1150000" />
+      <workItem from="1785412639359" duration="2000" />
     </task>
     <task id="LOCAL-00001" summary="navigator code">
       <option name="closed" value="true" />
@@ -338,7 +343,7 @@
       <breakpoints>
         <line-breakpoint type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/Core/Src/main.c</url>
-          <line>14</line>
+          <line>15</line>
           <option name="timeStamp" value="6" />
         </line-breakpoint>
         <line-breakpoint type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
@@ -398,13 +403,18 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/Core/Src/main.c</url>
-          <line>70</line>
-          <option name="timeStamp" value="426" />
+          <line>74</line>
+          <option name="timeStamp" value="264" />
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
-          <url>file://$PROJECT_DIR$/Core/Src/main.c</url>
-          <line>69</line>
-          <option name="timeStamp" value="427" />
+          <url>file://$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c</url>
+          <line>43</line>
+          <option name="timeStamp" value="265" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/Core/Src/lora_transmit/lora_send/lora_send.c</url>
+          <line>47</line>
+          <option name="timeStamp" value="266" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
