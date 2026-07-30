@@ -10,16 +10,13 @@
 #include "peripheral/i2c/i2c/i2c.h"
 #include "peripheral/i2c/lcd_config/lcd_config.h"
 #include "peripheral/usart/usart.h"
+#include "lora_transmit/lora_config/lora_config.h"
 
 // ============================================================================
 // USART Receive Buffer
 // Tích lũy từng byte từ interrupt, xử lý khi gặp ký tự '\n'
 // ============================================================================
 #define USART_RX_BUF_SIZE 64
-
-static volatile uint8_t usart_rx_buf[USART_RX_BUF_SIZE];
-static volatile uint8_t usart_rx_idx    = 0;
-static volatile uint8_t usart_msg_ready = 0;
 
 #define RX_BUFFER_SIZE 64
 
@@ -36,17 +33,23 @@ int main(void)
 
   // Khởi tạo ngoại vi
   MX_GPIO_Init();
-  MX_SPI1_Init();
   MX_I2C1_Init();
-  MX_TIM1_Init();
 
   // USART1: PA9=TX, PA10=RX — nhận dữ liệu từ board truyền qua dây nối trực tiếp
   MX_USART1_UART_Init();
 
+  // Cấu hình module LoRa E32: địa chỉ 0x0008, kênh 433MHz
+  LoRa_Config_Status config_status = LoRa_Configure_Module(LORA_ADDRESS, LORA_CHANNEL);
+
   // Màn hình LCD
   lcd_init();
   lcd_goto_xy(0, 0);
-  lcd_send_string("USART Receiver  ");
+  if (config_status == LORA_CONFIG_OK) {
+    lcd_send_string("LoRa: OK        ");
+  } else {
+    lcd_send_string("LoRa: FAIL      ");
+  }
+  HAL_Delay(2000);
   lcd_goto_xy(1, 0);
   lcd_send_string("Waiting data... ");
 
@@ -105,7 +108,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         rx_index++;
       }
     }
-
     // Kích hoạt lại ngắt nhận
     HAL_UART_Receive_IT(&huart1, &rx_data, 1);
   }
