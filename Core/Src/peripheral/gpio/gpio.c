@@ -1,43 +1,38 @@
 #include "gpio.h"
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
+  * @brief GPIO Initialization Function (Die Bibliothek, nämlich 'driver_gpio')
   * @retval None
   */
-void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
 
-  /* USER CODE END MX_GPIO_Init_1 */
+void MX_GPIO_ENABLE(GPIO_TypeDef *port) {
+  driver_gpio_clock_enable(port);
+}
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
+void MX_GPIO_INIT_Pin(GPIO_TypeDef *port, uint8_t pin, GPIO_Mode_t mode) {
+  if (port == NULL || pin > 15) {
+    return;
+  }
+  driver_gpio_init_pin(port, pin, mode);
+}
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_TEST_GPIO_Port, LED_TEST_Pin|GPIO_PIN_6, GPIO_PIN_RESET);
+void MX_GPIO_Write_Pin(GPIO_TypeDef *port, uint8_t pin, GPIO_PinState_t state) {
+  if (port == NULL || pin > 15) {
+    return;
+  }
+  driver_gpio_write_pin(port, pin, state);
+}
 
-  /*Configure GPIO pins : LED_TEST_Pin PA6 */
-  GPIO_InitStruct.Pin = LED_TEST_Pin|GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+GPIO_PinState_t MX_GPIO_Read_Pin(GPIO_TypeDef *port, uint8_t pin) {
+  if (port == NULL || pin > 15) {
+    return DRIVER_GPIO_PIN_RESET;
+  }
+  return driver_gpio_read_pin(port, pin);
+}
 
-  /*Configure GPIO pins : BUTTON_SHIFT_LEFT_Pin BUTTON_SHIFT_RIGHT_Pin */
-  GPIO_InitStruct.Pin = BUTTON_SHIFT_LEFT_Pin|BUTTON_SHIFT_RIGHT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
+void MX_GPIO_Toggle_Pin(GPIO_TypeDef *port, uint8_t pin) {
+  if (port == NULL || pin > 15) {
+    return;
+  }
+  driver_gpio_toggle_pin(port, pin);
 }

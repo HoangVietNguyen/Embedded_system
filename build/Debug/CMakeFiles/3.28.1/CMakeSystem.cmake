@@ -3,7 +3,7 @@ set(CMAKE_HOST_SYSTEM_NAME "Darwin")
 set(CMAKE_HOST_SYSTEM_VERSION "21.6.0")
 set(CMAKE_HOST_SYSTEM_PROCESSOR "x86_64")
 
-include("/Users/nguyenhoangviet/Desktop/STM32Project/MatrixLEDSPI/cmake/gcc-arm-none-eabi.cmake")
+include("/Users/nguyenhoangviet/Desktop/STM32Project/Embedded_system/cmake/gcc-arm-none-eabi.cmake")
 
 set(CMAKE_SYSTEM "Generic")
 set(CMAKE_SYSTEM_NAME "Generic")

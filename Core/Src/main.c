@@ -8,7 +8,6 @@
 #include "peripheral/i2c/i2c/i2c.h"
 #include "sensor_manager/dht11_driver/dht11.h"
 
-
 RTC_HandleTypeDef hrtc;
 
 int main(void)
@@ -17,7 +16,8 @@ int main(void)
 
   SystemClock_Config();
 
-  MX_GPIO_Init();
+  MX_GPIO_ENABLE(GPIOA);
+
   MX_SPI1_Init();
   MX_I2C1_Init();
   MX_TIM1_Init();
