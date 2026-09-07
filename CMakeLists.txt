@@ -1,17 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 
-#
-# This file is generated only once,
-# and is not re-generated if converter is called multiple times.
-#
-# User is free to modify the file as much as necessary
-#
-
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
-
 
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -72,7 +64,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
-# Add Register Driver library (.a binary)
+# Add Register Driver library subproject
 add_subdirectory(libs/STM32_driver)
 
 # Link directories setup
@@ -89,7 +81,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Core/Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/STM32_driver/include
 )
 
 # Add project symbols (macros)
@@ -103,7 +94,5 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
-    ${CMAKE_CURRENT_SOURCE_DIR}/libs/STM32_driver/lib/libstm32_arm_register_driver.a
+    STM32_driver
 )
-
-

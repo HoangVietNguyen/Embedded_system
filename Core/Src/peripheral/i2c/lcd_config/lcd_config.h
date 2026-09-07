@@ -3,7 +3,7 @@
 
 #include "main.h"
 
-#define LCD_ADDR (0x27 << 1)
+#define LCD_ADDR 0x27
 
 void lcd_send_cmd(char cmd);
 void lcd_send_data(char data);
