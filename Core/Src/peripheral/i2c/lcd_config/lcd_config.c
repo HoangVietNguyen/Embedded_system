@@ -1,6 +1,6 @@
 #include "lcd_config.h"
 #include "peripheral/i2c/i2c/i2c.h"
-#include "stm32f1xx_hal_i2c.h"
+#include "driver_i2c.h"
 
 void lcd_send_cmd(char cmd) {
     char data_u, data_l;
@@ -11,7 +11,7 @@ void lcd_send_cmd(char cmd) {
     data_t[1] = data_u | 0x08;  // RS = 0, EN = 0
     data_t[2] = data_l | 0x0C;  // RS = 0, EN = 1
     data_t[3] = data_l | 0x08;  // RS = 0, EN = 0
-    HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDR, (uint8_t *)data_t, 4, 100);
+    driver_i2c_master_transmit(I2C1, LCD_ADDR, data_t, 4);
 }
 
 void lcd_send_data(char data) {
@@ -23,8 +23,9 @@ void lcd_send_data(char data) {
     data_t[1] = data_u | 0x09;  // RS = 1, EN = 0  (Vì 0x08 | 0x01 = 0x09)
     data_t[2] = data_l | 0x0D;  // RS = 1, EN = 1
     data_t[3] = data_l | 0x09;  // RS = 1, EN = 0
-    HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDR, (uint8_t *)data_t, 4, 100);
+    driver_i2c_master_transmit(I2C1, LCD_ADDR, data_t, 4);
 }
+
 
 void lcd_init(void) {
     HAL_Delay(50);
