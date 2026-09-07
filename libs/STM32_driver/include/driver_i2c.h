@@ -15,6 +15,16 @@ extern "C" {
 /* ========================================================================= */
 
 /**
+ * @brief Statuscodes für I2C-Übertragungsfunktionen
+ */
+typedef enum {
+    I2C_STATUS_OK       = 0,
+    I2C_STATUS_ERROR    = 1,
+    I2C_STATUS_BUSY     = 2,
+    I2C_STATUS_TIMEOUT  = 3
+} I2C_Status_t;
+
+/**
  * @brief Enums für I2C-Busgeschwindigkeiten (Standard 100kHz / Fast 400kHz)
  */
 typedef enum {
@@ -39,9 +49,14 @@ typedef enum {
  * @param i2c Zeiger auf das I2C-Peripheriegerät (z.B. I2C1, I2C2)
  * @param speed Gewünschte Busgeschwindigkeit (100kHz oder 400kHz)
  */
-    void init_i2c_modul(I2C_TypeDef *i2c, I2C_Speed_t speed);
+void init_i2c_modul(I2C_TypeDef *i2c, I2C_Speed_t speed);
 
-    void init_gpio_i2c(uint8_t scl_gpio);
+/**
+ * @brief Konfiguriert die GPIO-Pins (SCL & SDA) für das I2C-Modul
+ * @param scl_gpio Pin-Nummer für SCL (z.B. 6 für PB6, 8 für PB8, 10 für PB10)
+ */
+void init_gpio_i2c(uint8_t scl_gpio);
+
 /**
  * @brief Konfiguriert die eigenen Slave-Adressen der MCU (Falls als Slave betrieben)
  * @param i2c Zeiger auf das I2C-Peripheriegerät
@@ -49,7 +64,17 @@ typedef enum {
  * @param own_addr1 Primäre Slave-Adresse (7-Bit)
  * @param own_addr2 Sekundäre Slave-Adresse (7-Bit, optional bei Dual Address)
  */
-    void set_owner_address(I2C_TypeDef *i2c, I2C_Address_Mode mode, uint8_t own_addr1, uint8_t own_addr2);
+void set_owner_address(I2C_TypeDef *i2c, I2C_Address_Mode mode, uint8_t own_addr1, uint8_t own_addr2);
+
+/**
+ * @brief Sendet Daten als I2C-Master an ein Slave-Gerät über das I2C-Register
+ * @param i2c Zeiger auf das I2C-Peripheriegerät (z.B. I2C1, I2C2)
+ * @param dev_addr 7-Bit-Zieladresse des Slave-Geräts
+ * @param data Zeiger auf den zu sendenden Datenpuffer
+ * @param len Anzahl der zu sendenden Bytes
+ * @return Status der Übertragung (I2C_STATUS_OK, I2C_STATUS_TIMEOUT, etc.)
+ */
+I2C_Status_t driver_i2c_master_transmit(I2C_TypeDef *i2c, uint8_t dev_addr, const uint8_t *data, uint16_t len);
 
 #ifdef __cplusplus
 }
