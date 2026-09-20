@@ -1,66 +1,51 @@
 #include "main.h"
-#include <stdlib.h>
-#include "driver_i2c.h"
 #include "peripheral/rcc/rcc.h"
-#include "peripheral/i2c/i2c/i2c.h"
-#include "sensor_manager/dht11_driver/dht11.h"
-#include "peripheral/i2c/lcd_config/lcd_config.h"
 #include "driver_gpio.h"
-#include "driver_iwdg.h"
+#include "driver_adc.h"
+#include "driver_pwm.h"
 
 int main(void)
 {
     HAL_Init();
     SystemClock_Config();
 
-    /* 1. Khởi tạo chân LED Onboard PC13 (Kit STM32 BluePill) */
+    /* 1. Khởi tạo Clock GPIOA & GPIOB */
+    driver_gpio_clock_enable(GPIOA);
     driver_gpio_clock_enable(GPIOB);
-    driver_gpio_init_pin(GPIOB, 3, GPIO_MODE_OUTPUT_PP_50MHZ);
 
-    /* 2. Kiểm tra xem lần khởi động này có phải do WATCHDOG RESET cứu hay không */
-    if (driver_iwdg_is_reset_caused_by_watchdog()) {
-        /* NẾU VỪA BỊ WATCHDOG RESET: Nháy LED PC13 siêu nhanh 5 lần để báo hiệu */
-        for (int i = 0; i < 5; i++) {
-            driver_gpio_toggle_pin(GPIOC, 13);
-            HAL_Delay(100);
-        }
-        driver_iwdg_clear_reset_flags(); // Xóa cờ báo Reset
-    } else {
-        /* NẾU KHỜI ĐỘNG BÌNH THƯỜNG: Sáng LED 1 lần */
-        driver_gpio_write_pin(GPIOC, 13, DRIVER_GPIO_PIN_RESET); // Bật LED PC13 (Active Low)
-        HAL_Delay(500);
-        driver_gpio_write_pin(GPIOC, 13, DRIVER_GPIO_PIN_SET);   // Tắt LED PC13
-    }
+    /* 2. Cấu hình chân PA0 (Đọc biến trở Analog Input) */
+    driver_gpio_init_pin(GPIOA, 0, GPIO_MODE_INPUT_ANALOG);
 
-    /* 3. Khởi tạo LCD I2C Bare-Metal */
-    MX_I2C1_Init();
-    lcd_init();
+    /* 3. Cấu hình chân PB6 ở chế độ Alternate Function Push-Pull xuất PWM TIM4_CH1 */
+    driver_gpio_init_pin(GPIOB, 6, GPIO_MODE_AF_PP_50MHZ);
 
-    /* 4. Khởi tạo Watchdog IWDG với Timeout = 1.5 giây */
-    // Prescaler /64 (625 Hz), Reload = 937 -> Timeout = 937 / 625 = 1.5 giây
-    driver_iwdg_init(IWDG_PRESCALER_64, 937);
+    /* 4. Khởi tạo ADC1 (Prescaler /6 = 12MHz, 239.5 cycles lấy mẫu tại PA0 / ADC1_IN0) */
+    driver_adc_init(DRIVER_ADC_PRESCALER_DIV6);
+    driver_adc_config_channel(ADC_CHANNEL_0, DRIVER_ADC_SAMPLETIME_239CYCLES5);
 
-    uint8_t feed_count = 0;
+    /* 5. Khởi tạo PWM TIM4 Kênh 1 (PB6) ở tần số 50 Hz (PSC = 71, ARR = 19999, Chu kỳ T = 20ms) */
+    driver_pwm_init(TIM4, PWM_CHANNEL_1, 71, 19999);
+
+    uint16_t adc_value = 0;
+    uint16_t pulse_us = 0;
 
     while (1)
     {
-        if (feed_count < 5) {
-            /* 5 lần đầu: "Cho chó ăn" bình thường mỗi 500ms -> Chip chạy mượt mà */
-            lcd_goto_xy(0, 0);
-            lcd_send_string("WDT: FEEDING... ");
+        /* Đọc giá trị biến trở lọc nhiễu 16 lần */
+        adc_value = driver_adc_read_avg(ADC_CHANNEL_0, 16);
 
-            driver_iwdg_refresh(); // "Cho chó ăn" / Refresh Counter về 1.5s
-            HAL_Delay(500);
-            feed_count++;
+        /* Khống chế dải đo tối đa 4085 */
+        if (adc_value > 4085) {
+            adc_value = 4085;
         }
-        else {
-            /* Lần 6: GIẢ LẬP HỆ THỐNG BỊ TREO!! */
-            /* Cố tình đứng chôn chân 3.0 giây mà KHÔNG gọi driver_iwdg_refresh() */
-            lcd_goto_xy(0, 0);
-            lcd_send_string("SYSTEM FREEZE!! ");
 
-            HAL_Delay(3000); // Hết 1.5s -> WATCHDOG CỨNG TỰ RESET CHIP NGAY LẬP TỨC!
-        }
+        /* KHÔI PHỤC DẢI ỔN ĐỊNH CHUẨN: Map 0..4085 vào dải 1.3ms .. 1.7ms (1300us .. 1700us) */
+        pulse_us = 1300U + ((uint32_t)adc_value * (1700U - 1300U)) / 4085U;
+
+        /* Xuất độ rộng xung trực tiếp vào thanh ghi CCR1 của TIM4 */
+        driver_pwm_set_duty_cycle(TIM4, PWM_CHANNEL_1, pulse_us);
+
+        HAL_Delay(20);
     }
 }
 
