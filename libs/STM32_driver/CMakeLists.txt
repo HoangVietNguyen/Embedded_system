@@ -6,8 +6,12 @@ add_library(STM32_driver STATIC
     src/driver_i2c.c
     src/driver_iwdg.c
     src/driver_adc.c
-    src/driver_pwm.c
+    src/driver_tim.c
     src/driver_dma.c
+    src/driver_usart.c
+    src/driver_interrupt.c
+    src/driver_exti.c
+    src/driver_spi.c
 )
 
 target_include_directories(STM32_driver PUBLIC
