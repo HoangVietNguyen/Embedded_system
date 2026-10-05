@@ -2,7 +2,6 @@
 #include "peripheral/rcc/rcc.h"
 #include "driver_gpio.h"
 #include "driver_adc.h"
-#include "driver_dma.h"
 #include "driver_tim.h"
 
 int main(void)
@@ -10,44 +9,41 @@ int main(void)
     HAL_Init();
     SystemClock_Config();
 
-    /* 1. Takt für GPIOA & GPIOB aktivieren */
+    /* 1. Kích hoạt Clock Port A và Port B bằng Bare-Metal Driver */
     driver_gpio_clock_enable(GPIOA);
     driver_gpio_clock_enable(GPIOB);
 
-    /* 2. Pin PA0 als analogen Eingang konfigurieren (Potentiometer) */
+    /* 2. Cấu hình chân PA0 làm ngõ vào Analog cho Biến trở (ADC1_IN0) */
     driver_gpio_init_pin(GPIOA, 0, GPIO_MODE_INPUT_ANALOG);
 
-    /* 3. Pin PB6 als Alternate Function Push-Pull für PWM TIM4_CH1 konfigurieren */
+    /* 3. Cấu hình chân PB6 làm Alternate Function Push-Pull cho PWM (TIM4_CH1) */
     driver_gpio_init_pin(GPIOB, 6, GPIO_MODE_AF_PP_50MHZ);
 
-    /* 4. ADC1 initialisieren (Prescaler /6 = 12MHz, 239.5 Zyklen Abtastzeit an PA0 / ADC1_IN0) */
+    /* 4. Khởi tạo ADC1 Bare-Metal (Bộ chia 6 = 12MHz, lấy mẫu 239.5 chu kỳ cho PA0 / ADC1_IN0) */
     driver_adc_init(DRIVER_ADC_PRESCALER_DIV6);
     driver_adc_config_channel(ADC_CHANNEL_0, DRIVER_ADC_SAMPLETIME_239CYCLES5);
 
-    /* 5. PWM TIM4 Kanal 1 (PB6) mit 10kHz initialisieren (PSC = 71, ARR = 99, Periodendauer T = 100us) */
+    /* 5. Khởi tạo PWM TIM4 Kanal 1 (PB6) tần số 10kHz (PSC = 71, ARR = 99 -> Chu kỳ T = 100us) */
     driver_tim_pwm_init(TIM4, TIM_CHANNEL_1, 71, 99);
-
-    static volatile uint32_t adc_value = 0;
-    uint16_t pulse_us = 0;
-
-    /* DMA1 für kontinuierliches Auslesen von ADC1 in die RAM-Variable adc_value aktivieren */
-    read_adc_dma((uint32_t*)&adc_value);
 
     while (1)
     {
-        /* ADC-Wert auslesen, der vom DMA automatisch im Hintergrund in adc_value aktualisiert wird */
-        uint16_t adc_value_read = (uint16_t)adc_value;
+        /* Đọc giá trị điện áp biến trở ở chân PA0 qua Bare-Metal Driver (Lấy trung bình 16 mẫu) */
+        uint16_t adc_val = driver_adc_read_avg(ADC_CHANNEL_0, 16);
 
-        /* Maximalen Messwert auf 4085 begrenzen */
-        if (adc_value_read > 4085) {
-            adc_value_read = 4085;
+        /* Giới hạn dải đầu vào ADC trong khoảng [6, 4070] */
+        if (adc_val < 6U) {
+            adc_val = 6U;
+        } else if (adc_val > 4070U) {
+            adc_val = 4070U;
         }
 
-        /* Skalierung: Zuordnung 0..4085 auf den Impulsbereich 1.3ms .. 1.7ms (1300us .. 1700us) */
-        pulse_us = 1300U + ((uint32_t)adc_value_read * (1700U - 1300U)) / 4050U;
+        /* Ánh xạ tuyến tính dải ADC [6 .. 4070] sang dải Duty Cycle [20% .. 90%] */
+        /* Với ARR = 99 (100 ticks), Duty Cycle X% tương ứng với Compare CCR1 = X */
+        uint32_t duty_percent = 20U + ((uint32_t)(adc_val - 6U) * (90U - 20U)) / (4070U - 6U);
 
-        /* Impulsbreite direkt in das Register TIM4->CCR1 schreiben */
-        driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, pulse_us);
+        /* Cập nhật giá trị CCR1 phần cứng để phát xung vuông Duty Cycle từ 20% đến 90% ở PB6 */
+        driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, (uint16_t)duty_percent);
 
         HAL_Delay(20);
     }

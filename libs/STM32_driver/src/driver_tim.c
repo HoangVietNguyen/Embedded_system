@@ -147,28 +147,28 @@ void driver_tim_pwm_init(TIM_TypeDef *TIMx, TIM_Channel_t channel, uint16_t pres
     /* 3. PWM-Modus 1 (OCxM = 110), Preload-Puffer (OCxPE) und Standard-CCR (1500us) setzen */
     switch (channel) {
         case DRIVER_TIM_CHANNEL_1:
-            TIMx->CCR1 = 1500U; /* Standard: 1.5ms Impuls (90 Grad) */
+            TIMx->CCR1 = auto_reload / 2U;
             TIMx->CCMR1 &= ~(TIM_CCMR1_OC1M | TIM_CCMR1_CC1S);
             TIMx->CCMR1 |= (6U << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE;
             TIMx->CCER |= TIM_CCER_CC1E;
             break;
 
         case DRIVER_TIM_CHANNEL_2:
-            TIMx->CCR2 = 1500U;
+            TIMx->CCR2 = auto_reload / 2U;
             TIMx->CCMR1 &= ~(TIM_CCMR1_OC2M | TIM_CCMR1_CC2S);
             TIMx->CCMR1 |= (6U << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
             TIMx->CCER |= TIM_CCER_CC2E;
             break;
 
         case DRIVER_TIM_CHANNEL_3:
-            TIMx->CCR3 = 1500U;
+            TIMx->CCR3 = auto_reload / 2U;
             TIMx->CCMR2 &= ~(TIM_CCMR2_OC3M | TIM_CCMR2_CC3S);
             TIMx->CCMR2 |= (6U << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
             TIMx->CCER |= TIM_CCER_CC3E;
             break;
 
         case DRIVER_TIM_CHANNEL_4:
-            TIMx->CCR4 = 1500U;
+            TIMx->CCR4 = auto_reload / 2U;
             TIMx->CCMR2 &= ~(TIM_CCMR2_OC4M | TIM_CCMR2_CC4S);
             TIMx->CCMR2 |= (6U << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
             TIMx->CCER |= TIM_CCER_CC4E;

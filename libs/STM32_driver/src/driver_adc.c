@@ -102,8 +102,8 @@ uint16_t driver_adc_read_channel(ADC_Channel_t channel) {
     /* 2. Clear EOC Flag (End of Conversion) */
     ADC1->SR &= ~ADC_SR_EOC;
 
-    /* 3. Wandlung durch Erneutes Setzen von ADON starten */
-    ADC1->CR2 |= ADC_CR2_ADON;
+    /* 3. Wandlung durch Setzen von SWSTART & ADON starten */
+    ADC1->CR2 |= ADC_CR2_SWSTART | ADC_CR2_ADON;
 
     /* 4. Warten, bis die Wandlung abgeschlossen ist (EOC == 1) */
     while (!(ADC1->SR & ADC_SR_EOC)) {
