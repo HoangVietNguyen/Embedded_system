@@ -70,7 +70,10 @@ void driver_adc_init(ADC_Prescaler_t prescaler) {
     /* 6. Standard-Konfiguration: Rechtsbündige Datenausrichtung & Einzelwandlungsmodus */
     ADC1->CR2 &= ~(ADC_CR2_ALIGN | ADC_CR2_CONT);
     
-    /* 7. Sequenzlänge auf 1 Wandlung setzen (L[3:0] = 0000 in SQR1) */
+    /* 7. External Trigger aktivieren und Triggerquelle auf SWSTART (111 = Software Trigger) setzen */
+    ADC1->CR2 |= ADC_CR2_EXTTRIG | (7U << ADC_CR2_EXTSEL_Pos);
+
+    /* 8. Sequenzlänge auf 1 Wandlung setzen (L[3:0] = 0000 in SQR1) */
     ADC1->SQR1 &= ~ADC_SQR1_L;
 }
 
@@ -105,8 +108,9 @@ uint16_t driver_adc_read_channel(ADC_Channel_t channel) {
     /* 3. Wandlung durch Setzen von SWSTART & ADON starten */
     ADC1->CR2 |= ADC_CR2_SWSTART | ADC_CR2_ADON;
 
-    /* 4. Warten, bis die Wandlung abgeschlossen ist (EOC == 1) */
-    while (!(ADC1->SR & ADC_SR_EOC)) {
+    /* 4. Warten, bis die Wandlung abgeschlossen ist (EOC == 1) mit Timeout-Schutz gegen Deadlock */
+    uint32_t timeout = 100000U;
+    while (!(ADC1->SR & ADC_SR_EOC) && --timeout) {
         /* Warten auf EOC-Flag */
     }
 
