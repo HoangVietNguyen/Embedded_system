@@ -177,6 +177,14 @@ void driver_spi_transmit_16bit(SPI_TypeDef *SPIx, const uint16_t *data, uint16_t
  */
 void driver_spi_receive_16bit(SPI_TypeDef *SPIx, uint16_t *data, uint16_t size);
 
+/** Fixed-length SPI1 slave DMA receive. Completion callback runs in DMA1 Channel 2 IRQ. */
+typedef void (*Driver_SPI_DmaRxCallback_t)(SPI_TypeDef *SPIx,
+                                           const uint8_t *buffer,
+                                           uint16_t length);
+bool dma_spi_receive_it(SPI_TypeDef *SPIx, uint8_t *buffer, uint16_t length,
+                        Driver_SPI_DmaRxCallback_t callback,
+                        uint32_t preempt_priority, uint32_t sub_priority);
+
 #ifdef __cplusplus
 }
 #endif

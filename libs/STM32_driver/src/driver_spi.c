@@ -1,5 +1,7 @@
 #include "driver_spi.h"
 #include "driver_gpio.h"
+#include "driver_dma.h"
+#include "driver_interrupt.h"
 
 /* Makro zur internen Taktaktivierung des entsprechenden SPI */
 // RM008 pdf page 275/1136, SPI1-APB1, SPI2-APB2
@@ -10,21 +12,44 @@ do { \
     if ((PORT) == SPI1) { \
         RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;\
         driver_gpio_clock_enable(GPIOA); \
-        driver_gpio_init_pin(GPIOA, 4 , GPIO_MODE_OUTPUT_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOA, 5 , GPIO_MODE_AF_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOA, 7 , GPIO_MODE_AF_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOA, 6 , GPIO_MODE_INPUT_PULLUP); \
         SPI1->CR1 &= ~SPI_CR1_SPE; \
     } else if ((PORT) == SPI2) { \
         RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;\
         driver_gpio_clock_enable(GPIOB); \
-        driver_gpio_init_pin(GPIOB, 12 , GPIO_MODE_OUTPUT_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOB, 13 , GPIO_MODE_AF_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOB, 15 , GPIO_MODE_AF_PP_50MHZ); \
-        driver_gpio_init_pin(GPIOB, 14 , GPIO_MODE_INPUT_PULLUP); \
         SPI2->CR1 &= ~SPI_CR1_SPE; \
     } \
 } while(0)
+
+static void driver_spi_configure_pins(SPI_TypeDef *SPIx, SPI_Mode_t mode)
+{
+    GPIO_Mode_t select_mode = (mode == DRIVER_SPI_MODE_MASTER)
+        ? GPIO_MODE_OUTPUT_PP_50MHZ : GPIO_MODE_INPUT_FLOATING;
+    GPIO_Mode_t sck_mode = (mode == DRIVER_SPI_MODE_MASTER)
+        ? GPIO_MODE_AF_PP_50MHZ : GPIO_MODE_INPUT_FLOATING;
+    GPIO_Mode_t mosi_mode = (mode == DRIVER_SPI_MODE_MASTER)
+        ? GPIO_MODE_AF_PP_50MHZ : GPIO_MODE_INPUT_FLOATING;
+    GPIO_Mode_t miso_mode = (mode == DRIVER_SPI_MODE_MASTER)
+        ? GPIO_MODE_INPUT_FLOATING : GPIO_MODE_AF_PP_50MHZ;
+
+    if (SPIx == SPI1) {
+        driver_gpio_init_pin(GPIOA, 4U, select_mode);
+        driver_gpio_init_pin(GPIOA, 5U, sck_mode);
+        driver_gpio_init_pin(GPIOA, 6U, miso_mode);
+        driver_gpio_init_pin(GPIOA, 7U, mosi_mode);
+    } else if (SPIx == SPI2) {
+        driver_gpio_init_pin(GPIOB, 12U, select_mode);
+        driver_gpio_init_pin(GPIOB, 13U, sck_mode);
+        driver_gpio_init_pin(GPIOB, 14U, miso_mode);
+        driver_gpio_init_pin(GPIOB, 15U, mosi_mode);
+    }
+}
+
+static struct {
+    SPI_TypeDef *spi;
+    uint8_t *buffer;
+    uint16_t length;
+    Driver_SPI_DmaRxCallback_t callback;
+} spi1_dma_rx_state;
 
 void driver_spi_init(SPI_TypeDef *SPIx, const SPI_Config_t *config) {
     if (SPIx == NULL || config == NULL) {
@@ -34,17 +59,18 @@ void driver_spi_init(SPI_TypeDef *SPIx, const SPI_Config_t *config) {
     RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
 
     DRIVER_SPI_ENABLE(SPIx);
+    driver_spi_configure_pins(SPIx, config->mode);
+
+    SPIx->CR1 &= ~(SPI_CR1_MSTR | (7U << SPI_CR1_BR_Pos) |
+                   SPI_CR1_CPOL | SPI_CR1_CPHA | SPI_CR1_DFF |
+                   SPI_CR1_LSBFIRST | SPI_CR1_SSM | SPI_CR1_SSI);
 
     if (config->mode == SPI_MODE_MASTER) {
         SPIx->CR1 |= SPI_CR1_MSTR;
-    } else {
-        SPIx->CR1 &= ~SPI_CR1_MSTR;
+        /* Software NSS for master; PA4 is used as the manual chip select. */
+        SPIx->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI;
     }
-
-    /* Software Slave Management aktivieren (SSM = 1, SSI = 1) zur Vermeidung von MODF-Fehlern */
-    SPIx->CR1 &= ~(3UL << SPI_CR1_SSI_Pos);
-    SPIx->CR1 |= SPI_CR1_SSM;
-    SPIx->CR1 |= SPI_CR1_SSI;
+    /* Slave mode uses PA4/NSS as a hardware input, driven by the master's CS. */
 
     /* Bitfeld BR[2:0] loeschen und neue Baudrate setzen */
     SPIx->CR1 &= ~(7U << SPI_CR1_BR_Pos);
@@ -188,4 +214,61 @@ void driver_spi_receive_16bit(SPI_TypeDef *SPIx, uint16_t *data, uint16_t size) 
 
     /* Chờ cho đến khi SPI-Bus rảnh hoàn toàn (BSY = 0) */
     while (SPIx->SR & SPI_SR_BSY);
+}
+
+bool dma_spi_receive_it(SPI_TypeDef *SPIx, uint8_t *buffer, uint16_t length,
+                        Driver_SPI_DmaRxCallback_t callback,
+                        uint32_t preempt_priority, uint32_t sub_priority)
+{
+    if (SPIx != SPI1 || buffer == NULL || length == 0U || callback == NULL) {
+        return false;
+    }
+
+    DMA_Config_t config = {
+        .periph_base_addr = (uint32_t)&SPI1->DR,
+        .mem_base_addr = (uint32_t)buffer,
+        .data_length = length,
+        .direction = DRIVER_DMA_DIR_PERIPH_TO_MEM,
+        .periph_data_size = DRIVER_DMA_DATA_SIZE_8BIT,
+        .mem_data_size = DRIVER_DMA_DATA_SIZE_8BIT,
+        .periph_inc_enable = false,
+        .mem_inc_enable = true,
+        .priority = DRIVER_DMA_PRIORITY_HIGH,
+        .mode = DRIVER_DMA_MODE_NORMAL
+    };
+
+    driver_dma_clock_enable(DMA1);
+    driver_dma_stop(DMA1_Channel2);
+    driver_dma_clear_flags(DMA1, 2U);
+    driver_dma_init(DMA1_Channel2, &config);
+
+    spi1_dma_rx_state.spi = SPI1;
+    spi1_dma_rx_state.buffer = buffer;
+    spi1_dma_rx_state.length = length;
+    spi1_dma_rx_state.callback = callback;
+
+    DMA1_Channel2->CCR |= DMA_CCR_TCIE;
+    driver_interrupt_nvic_config(DMA1_Channel2_IRQn,
+                                 preempt_priority, sub_priority, true);
+    SPI1->CR2 |= SPI_CR2_RXDMAEN;
+    SPI1->CR1 |= SPI_CR1_SPE;
+    driver_dma_start(DMA1_Channel2);
+    return true;
+}
+
+void DMA1_Channel2_IRQHandler(void)
+{
+    if (!driver_dma_is_transfer_complete(DMA1, 2U)) {
+        return;
+    }
+
+    driver_dma_stop(DMA1_Channel2);
+    SPI1->CR2 &= ~SPI_CR2_RXDMAEN;
+    driver_dma_clear_flags(DMA1, 2U);
+
+    if (spi1_dma_rx_state.callback != NULL) {
+        spi1_dma_rx_state.callback(spi1_dma_rx_state.spi,
+                                   spi1_dma_rx_state.buffer,
+                                   spi1_dma_rx_state.length);
+    }
 }

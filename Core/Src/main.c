@@ -6,21 +6,34 @@
 #include "peripheral/rcc/rcc.h"
 #include "driver_gpio.h"
 #include "driver_i2c.h"
+#include "driver_spi.h"
 #include "driver_tim.h"
 #include "driver_usart.h"
 #include "peripheral/i2c/lcd_config/lcd_config.h"
 
 static volatile uint16_t latest_adc_value;
-enum { USART_RX_BUFFER_SIZE = 64U };
+enum { USART_RX_BUFFER_SIZE = 64U, LCD_COLUMNS = 16U, RX_TEXT_CAPACITY = 64U };
 static volatile uint8_t usart_rx_buffer[USART_RX_BUFFER_SIZE];
+static volatile uint32_t usart_rx_order[USART_RX_BUFFER_SIZE];
 static volatile uint8_t usart_rx_head;
 static volatile uint8_t usart_rx_tail;
 static uint8_t usart_rx_dma_byte;
 static volatile uint8_t usart_rx_restart_failed;
+enum { SPI_RX_MESSAGE_LENGTH = 19U };
+static uint8_t spi_rx_dma_buffer[SPI_RX_MESSAGE_LENGTH];
+static volatile char spi_rx_pending_text[RX_TEXT_CAPACITY];
+static volatile uint8_t spi_rx_pending_length;
+static volatile uint8_t spi_rx_pending;
+static volatile uint32_t spi_rx_pending_order;
+static volatile char usart_pending_text[RX_TEXT_CAPACITY];
+static volatile uint8_t usart_pending_length;
+static volatile uint8_t usart_pending;
+static volatile uint32_t usart_pending_order;
+static volatile uint32_t receive_event_order;
+static volatile uint8_t spi_rx_restart_failed;
 static volatile uint8_t lcd_i2c_busy;
 static volatile uint8_t adc_lcd_pending;
 
-enum { LCD_COLUMNS = 16U, RX_TEXT_CAPACITY = 64U };
 static char rx_build_text[RX_TEXT_CAPACITY];
 static uint8_t rx_build_length;
 static char rx_display_text[RX_TEXT_CAPACITY];
@@ -28,6 +41,15 @@ static uint8_t rx_display_length;
 static uint8_t rx_scroll_position;
 static uint8_t rx_display_dirty;
 static uint32_t rx_last_scroll_tick;
+
+static uint32_t next_receive_event_order(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    uint32_t order = ++receive_event_order;
+    __set_PRIMASK(primask);
+    return order;
+}
 
 static void lcd_write_adc_value(uint16_t value)
 {
@@ -90,6 +112,7 @@ static void usart_dma_rx_callback(USART_TypeDef *USARTx,
         uint8_t next = (uint8_t)((usart_rx_head + 1U) % USART_RX_BUFFER_SIZE);
         if (next != usart_rx_tail) {
             usart_rx_buffer[usart_rx_head] = buffer[i];
+            usart_rx_order[usart_rx_head] = next_receive_event_order();
             usart_rx_head = next;
         }
     }
@@ -98,6 +121,76 @@ static void usart_dma_rx_callback(USART_TypeDef *USARTx,
     if (!dma_usart_receive_it(USARTx, &usart_rx_dma_byte, 1U,
                               usart_dma_rx_callback, 1U, 0U)) {
         usart_rx_restart_failed = 1U;
+    }
+}
+
+static void spi_dma_rx_callback(SPI_TypeDef *SPIx,
+                                const uint8_t *buffer,
+                                uint16_t length)
+{
+    uint8_t text_length = 0U;
+    for (uint16_t i = 0U; i < length && text_length < (RX_TEXT_CAPACITY - 1U); ++i) {
+        if (buffer[i] != '\r' && buffer[i] != '\n') {
+            spi_rx_pending_text[text_length++] = (char)buffer[i];
+        }
+    }
+    spi_rx_pending_text[text_length] = '\0';
+    spi_rx_pending_length = text_length;
+    spi_rx_pending_order = next_receive_event_order();
+    spi_rx_pending = 1U;
+
+    /* Rearm the fixed-length SPI1 RX DMA transfer for the next button-triggered message. */
+    if (!dma_spi_receive_it(SPIx, spi_rx_dma_buffer, SPI_RX_MESSAGE_LENGTH,
+                            spi_dma_rx_callback, 1U, 0U)) {
+        spi_rx_restart_failed = 1U;
+    }
+}
+
+static void display_newest_received_message(void)
+{
+    char text[RX_TEXT_CAPACITY];
+    uint8_t text_length = 0U;
+    uint8_t have_message = 0U;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    if (spi_rx_pending != 0U && usart_pending != 0U) {
+        uint8_t spi_is_newer = (int32_t)(spi_rx_pending_order - usart_pending_order) > 0;
+        volatile char *source = spi_is_newer ? spi_rx_pending_text : usart_pending_text;
+        text_length = spi_is_newer ? spi_rx_pending_length : usart_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = source[i];
+        }
+        spi_rx_pending = 0U;
+        usart_pending = 0U;
+        have_message = 1U;
+    } else if (spi_rx_pending != 0U) {
+        text_length = spi_rx_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = spi_rx_pending_text[i];
+        }
+        spi_rx_pending = 0U;
+        have_message = 1U;
+    } else if (usart_pending != 0U) {
+        text_length = usart_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = usart_pending_text[i];
+        }
+        usart_pending = 0U;
+        have_message = 1U;
+    }
+
+    __set_PRIMASK(primask);
+
+    if (have_message != 0U) {
+        text[text_length] = '\0';
+        for (uint8_t i = 0U; i <= text_length; ++i) {
+            rx_display_text[i] = text[i];
+        }
+        rx_display_length = text_length;
+        rx_scroll_position = 0U;
+        rx_display_dirty = 1U;
+        rx_last_scroll_tick = HAL_GetTick();
     }
 }
 
@@ -159,12 +252,28 @@ int main(void)
         Error_Handler();
     }
 
+    /* SPI1 slave receives the sender's fixed 19-byte message with DMA1 Channel 2. */
+    const SPI_Config_t spi_config = {
+        .mode = DRIVER_SPI_MODE_SLAVE,
+        .baudrate = DRIVER_SPI_BAUDRATE_DIV16,
+        .cpol = DRIVER_SPI_CPOL_LOW,
+        .cpha = DRIVER_SPI_CPHA_1EDGE,
+        .data_frame = DRIVER_SPI_DFF_8BIT,
+        .first_bit = DRIVER_SPI_FIRSTBIT_MSB
+    };
+    driver_spi_init(SPI1, &spi_config);
+
     /* I2C/LCD must be ready before ADC interrupts can call the callback. */
     init_i2c_modul(I2C1, I2C_SPEED_FAST_400KHz);
     lcd_init();
     lcd_goto_xy(0, 0);
 
     driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, 20U);
+
+    if (!dma_spi_receive_it(SPI1, spi_rx_dma_buffer, SPI_RX_MESSAGE_LENGTH,
+                            spi_dma_rx_callback, 1U, 0U)) {
+        Error_Handler();
+    }
 
     driver_adc_set_value_changed_callback(adc_value_changed);
     read_adc_dma(DMA1_Channel1, &adc_value);
@@ -175,9 +284,13 @@ int main(void)
         if (usart_rx_restart_failed != 0U) {
             Error_Handler();
         }
+        if (spi_rx_restart_failed != 0U) {
+            Error_Handler();
+        }
 
         while (usart_rx_tail != usart_rx_head) {
             uint8_t received = usart_rx_buffer[usart_rx_tail];
+            uint32_t received_order = usart_rx_order[usart_rx_tail];
             usart_rx_tail = (uint8_t)((usart_rx_tail + 1U) % USART_RX_BUFFER_SIZE);
             /* Echo the received byte outside the interrupt handler. */
             driver_usart_send_char(USART1, (char)received);
@@ -188,17 +301,18 @@ int main(void)
             if (received == '\n') {
                 rx_build_text[rx_build_length] = '\0';
                 for (uint8_t i = 0U; i <= rx_build_length; ++i) {
-                    rx_display_text[i] = rx_build_text[i];
+                    usart_pending_text[i] = rx_build_text[i];
                 }
-                rx_display_length = rx_build_length;
+                usart_pending_length = rx_build_length;
+                usart_pending_order = received_order;
+                usart_pending = 1U;
                 rx_build_length = 0U;
-                rx_scroll_position = 0U;
-                rx_display_dirty = 1U;
-                rx_last_scroll_tick = HAL_GetTick();
             } else if (rx_build_length < (RX_TEXT_CAPACITY - 1U)) {
                 rx_build_text[rx_build_length++] = (char)received;
             }
         }
+
+        display_newest_received_message();
 
         uint32_t now = HAL_GetTick();
         if (rx_display_length > LCD_COLUMNS &&
