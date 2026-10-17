@@ -94,15 +94,15 @@ uint8_t driver_spi_transmit_receive_byte(SPI_TypeDef *SPIx, uint8_t tx_data) {
 }
 
 void driver_spi_transmit(SPI_TypeDef *SPIx, const uint8_t *data, uint16_t size) {
+    //SR-Register
+
     if (SPIx == NULL || data == NULL || size == 0U) {
         return;
     }
-
     for (uint16_t i = 0U; i < size; i++) {
         /* Gửi byte data[i], bỏ qua giá trị trả về */
         (void)driver_spi_transmit_receive_byte(SPIx, data[i]);
     }
-
     /* Chờ cho đến khi SPI-Bus rảnh hoàn toàn (BSY = 0) */
     while (SPIx->SR & SPI_SR_BSY);
 }
@@ -111,16 +111,26 @@ void driver_spi_receive(SPI_TypeDef *SPIx, uint8_t *data, uint16_t size) {
     if (SPIx == NULL || data == NULL || size == 0U) {
         return;
     }
-
     for (uint16_t i = 0U; i < size; i++) {
         /* Gửi Dummy Byte (0xFF) để kích hoạt Clock SCK và nhận byte dữ liệu về */
         data[i] = driver_spi_transmit_receive_byte(SPIx, 0xFFU);
     }
-
     /* Chờ cho đến khi SPI-Bus rảnh hoàn toàn (BSY = 0) */
     while (SPIx->SR & SPI_SR_BSY);
 }
 
+//    [ SCK  ] ───────────────────┬─────────────────── (SCK Bus chung)
+//    [ MOSI ] ───────────────────┼─────────────────── (MOSI Bus chung)
+//    [ MISO ] ───────────────────┼─────────────────── (MISO Bus chung)
+//
+//    [ CS1  ] ─────────┐         │                   │
+//    [ CS2  ] ─────────┼─────────┼─────────┐         │
+//                      │         │         │         │
+//                      V         V         V         V
+//                +-------------------+   +-------------------+
+//                |  SLAVE 1 (Sensor) |   |  SLAVE 2 (OLED)   |
+//                |  CS1 = LOW (Chạy) |   |  CS2 = HIGH (Hi-Z)|
+//                +-------------------+   +-------------------+
 void driver_spi_cs_low(GPIO_TypeDef *port, uint8_t pin) {
     driver_gpio_write_pin(port, pin, DRIVER_GPIO_PIN_RESET);
 }

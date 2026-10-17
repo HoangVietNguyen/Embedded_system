@@ -145,7 +145,13 @@ uint16_t driver_adc_read_channel(ADC_Channel_t channel);
  */
 uint16_t driver_adc_read_avg(ADC_Channel_t channel, uint8_t samples);
 
-uint32_t read_adc_dma(uint32_t *adc_value);
+// NEU: alter Prototyp uint32_t read_adc_dma(uint32_t *adc_value) ersetzt durch die Version mit DMA-Kanal-Parameter
+// NEU: DMA-Kanal wird dynamisch übergeben (nur DMA1_Channel1 ist für ADC1 gültig), Puffer ist volatile
+uint32_t read_adc_dma(DMA_Channel_TypeDef *dma_channel, volatile uint32_t *adc_value);
+
+/** Called from DMA1_Channel1_IRQHandler when a new ADC sample differs. */
+typedef void (*Driver_ADC_ValueChangedCallback_t)(uint16_t value);
+void driver_adc_set_value_changed_callback(Driver_ADC_ValueChangedCallback_t callback);
 
 #ifdef __cplusplus
 }

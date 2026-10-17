@@ -14,6 +14,28 @@ extern "C" {
 /* Definitionen & Strukturen für den TIM (Timer) Treiber                      */
 /* ========================================================================= */
 
+typedef enum {
+    DRIVER_TIM_REMAP_NONE          = 0U,
+    DRIVER_TIM1_REMAP_PARTIAL      = 1U,
+    DRIVER_TIM1_REMAP_FULL         = 3U,
+    DRIVER_TIM2_REMAP_PARTIAL_1    = 1U,
+    DRIVER_TIM2_REMAP_PARTIAL_2    = 2U,
+    DRIVER_TIM2_REMAP_FULL         = 3U,
+    DRIVER_TIM3_REMAP_PARTIAL      = 2U,
+    DRIVER_TIM3_REMAP_FULL         = 3U,
+    DRIVER_TIM4_REMAP_FULL         = 1U
+} TIM_Remap_t;
+
+/* Backward compatibility alias */
+typedef TIM_Remap_t DRIVER_TIM_Remap_t;
+
+/**
+ * @brief Konfiguriert das Pin-Remapping für einen bestimmten Timer über das Register AFIO->MAPR
+ * @param TIMx Zeiger auf das Timer-Register (TIM1, TIM2, TIM3, TIM4)
+ * @param remap Gewünschter Remap-Modus (TIM_Remap_t)
+ */
+void driver_tim_set_remap(TIM_TypeDef *TIMx, TIM_Remap_t remap);
+
 /**
  * @brief Timer-Kanäle (Channel 1 bis Channel 4)
  */
@@ -23,6 +45,15 @@ typedef enum {
     DRIVER_TIM_CHANNEL_3 = 3U,
     DRIVER_TIM_CHANNEL_4 = 4U
 } TIM_Channel_t;
+
+typedef struct  {
+    DMA_TypeDef *dma_instance;
+    DMA_Channel_TypeDef *dma_channel;
+    uint32_t rcc_ahb_mask;
+    volatile uint32_t *target_ccr;
+    uint16_t tim_dier_mask;
+} Driver_TIM_DMA_Mapping_t;
+
 
 /* Backward compatibility aliases */
 #ifndef TIM_CHANNEL_1
@@ -147,6 +178,15 @@ void driver_tim_pwm_set_duty_percent_u8(TIM_TypeDef *TIMx, TIM_Channel_t channel
  * @param angle Stellwinkel in Grad (0 bis 180)
  */
 void driver_tim_pwm_set_servo_angle(TIM_TypeDef *TIMx, TIM_Channel_t channel, uint8_t angle);
+
+/**
+ * NEU: Filtert aus der DMA-Request-Tabelle (RM0008, DMA1) den passenden DMA-Kanal für CCx-DMA-Anforderung eines Timer-Kanals
+ * @param TIMx Zeiger auf das Timer-Register (TIM1, TIM2, TIM3, TIM4)
+ * @param channel Timer-Kanal (TIM_CHANNEL_1 .. 4)
+ * @param mapping Ausgabe: DMA-Controller, DMA-Kanal, RCC-Maske, Ziel-CCR-Register und DIER-Maske (CCxDE)
+ * @return true wenn eine Zuordnung existiert, false sonst (z. B. TIM3_CH2 und TIM4_CH4 haben keine DMA-Anforderung)
+ */
+bool driver_tim_get_dma_mapping(TIM_TypeDef *TIMx, TIM_Channel_t channel, Driver_TIM_DMA_Mapping_t *mapping);
 
 #ifdef __cplusplus
 }

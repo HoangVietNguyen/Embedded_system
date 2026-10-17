@@ -2,6 +2,7 @@
 #include <string.h>
 #include "driver_gpio.h"
 #include "driver_dma.h"
+#include "driver_interrupt.h"
 
 /* ========================================================================= */
 /* Implementierung der bare-metal USART-Treiberfunktionen                    */
@@ -12,22 +13,101 @@ do { \
 if ((PORT) == USART1) { RCC->APB2ENR |= RCC_APB2ENR_USART1EN; \
     driver_gpio_clock_enable(GPIOA); \
     driver_gpio_init_pin(GPIOA, 9, GPIO_MODE_AF_PP_50MHZ);\
-    driver_gpio_init_pin(GPIOA, 10, GPIO_MODE_AF_PP_50MHZ);\
+    /* RX ist ein Eingang, der vom TX des anderen Chips angesteuert wird; AF Push-Pull ist für TX. */\
+    driver_gpio_init_pin(GPIOA, 10, GPIO_MODE_INPUT_FLOATING);\
 } \
 else if ((PORT) == USART2) { RCC->APB1ENR |= RCC_APB1ENR_USART2EN; \
     driver_gpio_clock_enable(GPIOA); \
     driver_gpio_init_pin(GPIOA, 2, GPIO_MODE_AF_PP_50MHZ);\
-    driver_gpio_init_pin(GPIOA, 3, GPIO_MODE_AF_PP_50MHZ);\
+    /* RX ist ein Eingang, der vom TX des anderen Chips angesteuert wird; AF Push-Pull ist für TX. */\
+    driver_gpio_init_pin(GPIOA, 3, GPIO_MODE_INPUT_FLOATING);\
 } \
 else if ((PORT) == USART3) { RCC->APB1ENR |= RCC_APB1ENR_USART3EN; \
     driver_gpio_clock_enable(GPIOB); \
     driver_gpio_init_pin(GPIOB, 10, GPIO_MODE_AF_PP_50MHZ);\
-    driver_gpio_init_pin(GPIOB, 11, GPIO_MODE_AF_PP_50MHZ);\
+    /* RX ist ein Eingang, der vom TX des anderen Chips angesteuert wird; AF Push-Pull ist für TX. */\
+    driver_gpio_init_pin(GPIOB, 11, GPIO_MODE_INPUT_FLOATING);\
 } \
 } while (0)
 /* USART1 läuft auf APB2 (72 MHz), USART2 und USART3 laufen auf APB1 (36 MHz) */
 
 static volatile USART_TypeDef* enable_usart = USART1;
+static Driver_USART_RxCallback_t usart1_rx_callback;
+static Driver_USART_RxCallback_t usart2_rx_callback;
+static Driver_USART_RxCallback_t usart3_rx_callback;
+
+typedef struct {
+    USART_TypeDef *usart;
+    uint8_t *buffer;
+    uint16_t length;
+    Driver_USART_DmaRxCallback_t callback;
+} Driver_USART_DmaRxState_t;
+
+static Driver_USART_DmaRxState_t usart1_dma_rx_state;
+static Driver_USART_DmaRxState_t usart2_dma_rx_state;
+static Driver_USART_DmaRxState_t usart3_dma_rx_state;
+
+static IRQn_Type driver_usart_get_irq(USART_TypeDef *target) {
+    if (target == USART1) return USART1_IRQn;
+    if (target == USART2) return USART2_IRQn;
+    if (target == USART3) return USART3_IRQn;
+    return (IRQn_Type)-1;
+}
+
+bool driver_usart_set_rx_callback(USART_TypeDef *USARTx, Driver_USART_RxCallback_t callback,
+                                  uint32_t preempt_priority, uint32_t sub_priority) {
+    USART_TypeDef *target = (USARTx != NULL) ? USARTx : (USART_TypeDef*)enable_usart;
+    IRQn_Type irq = driver_usart_get_irq(target);
+    if ((int32_t)irq < 0) return false;
+
+    if (target == USART1) usart1_rx_callback = callback;
+    else if (target == USART2) usart2_rx_callback = callback;
+    else usart3_rx_callback = callback;
+
+    if (callback == NULL) {
+        target->CR1 &= ~USART_CR1_RXNEIE;
+        driver_interrupt_nvic_config(irq, preempt_priority, sub_priority, false);
+        return true;
+    }
+
+    target->CR1 |= (USART_CR1_RE | USART_CR1_RXNEIE);
+    driver_interrupt_nvic_config(irq, preempt_priority, sub_priority, true);
+    return true;
+}
+
+static void driver_usart_handle_rx_irq(USART_TypeDef *target, Driver_USART_RxCallback_t callback) {
+    if ((target->SR & USART_SR_RXNE) != 0U) {
+        uint8_t data = (uint8_t)(target->DR & 0xFFU); /* DR read clears RXNE */
+        if (callback != NULL) callback(target, data);
+    }
+}
+
+void USART1_IRQHandler(void) { driver_usart_handle_rx_irq(USART1, usart1_rx_callback); }
+void USART2_IRQHandler(void) { driver_usart_handle_rx_irq(USART2, usart2_rx_callback); }
+void USART3_IRQHandler(void) { driver_usart_handle_rx_irq(USART3, usart3_rx_callback); }
+
+static void driver_usart_handle_dma_rx_irq(uint8_t channel_num,
+                                            Driver_USART_DmaRxState_t *state,
+                                            DMA_Channel_TypeDef *channel) {
+    if (!driver_dma_is_transfer_complete(DMA1, channel_num)) return;
+
+    driver_dma_stop(channel);
+    state->usart->CR3 &= ~USART_CR3_DMAR;
+    driver_dma_clear_flags(DMA1, channel_num);
+
+    Driver_USART_DmaRxCallback_t callback = state->callback;
+    if (callback != NULL) callback(state->usart, state->buffer, state->length);
+}
+
+void DMA1_Channel3_IRQHandler(void) {
+    driver_usart_handle_dma_rx_irq(3U, &usart3_dma_rx_state, DMA1_Channel3);
+}
+void DMA1_Channel5_IRQHandler(void) {
+    driver_usart_handle_dma_rx_irq(5U, &usart1_dma_rx_state, DMA1_Channel5);
+}
+void DMA1_Channel6_IRQHandler(void) {
+    driver_usart_handle_dma_rx_irq(6U, &usart2_dma_rx_state, DMA1_Channel6);
+}
 
 /**
  * @brief Aktiviert den Peripherietakt für das USART-Modul und AFIO im RCC
@@ -297,5 +377,48 @@ bool dma_usart_receive_string(USART_TypeDef *USARTx, uint8_t *buffer, uint16_t l
     /* 3. DMA-Kanal für den kontinuierlichen Empfang im Hintergrund starten */
     driver_dma_start(dma_channel);
 
+    return true;
+}
+
+bool dma_usart_receive_it(USART_TypeDef *USARTx, uint8_t *buffer, uint16_t length,
+                          Driver_USART_DmaRxCallback_t callback,
+                          uint32_t preempt_priority, uint32_t sub_priority) {
+    USART_TypeDef *target = (USARTx != NULL) ? USARTx : (USART_TypeDef*)enable_usart;
+    if (target == NULL || buffer == NULL || length == 0U || callback == NULL) return false;
+
+    DMA_Channel_TypeDef *channel;
+    uint8_t channel_num;
+    IRQn_Type irq;
+    Driver_USART_DmaRxState_t *state;
+    if (target == USART1) {
+        channel = DMA1_Channel5; channel_num = 5U; irq = DMA1_Channel5_IRQn;
+        state = &usart1_dma_rx_state;
+    } else if (target == USART2) {
+        channel = DMA1_Channel6; channel_num = 6U; irq = DMA1_Channel6_IRQn;
+        state = &usart2_dma_rx_state;
+    } else if (target == USART3) {
+        channel = DMA1_Channel3; channel_num = 3U; irq = DMA1_Channel3_IRQn;
+        state = &usart3_dma_rx_state;
+    } else return false;
+
+    /* Fixed-length one-shot transfer: callback fires after exactly length bytes. */
+    DMA_Config_t config = create_config_dma_usart_rx(target, buffer, length);
+    config.mode = DRIVER_DMA_MODE_NORMAL;
+    driver_dma_clock_enable(DMA1);
+    driver_dma_stop(channel);
+    driver_dma_clear_flags(DMA1, channel_num);
+    driver_dma_init(channel, &config);
+    state->usart = target;
+    state->buffer = buffer;
+    state->length = length;
+    state->callback = callback;
+
+    /* TCIE enables the DMA transfer-complete interrupt; NVIC routes it to the ISR. */
+    channel->CCR |= DMA_CCR_TCIE;
+    driver_interrupt_nvic_config(irq, preempt_priority, sub_priority, true);
+    /* DMA owns DR during this transfer; avoid a competing byte-wise RXNE ISR. */
+    target->CR1 &= ~USART_CR1_RXNEIE;
+    target->CR3 |= USART_CR3_DMAR;
+    driver_dma_start(channel);
     return true;
 }

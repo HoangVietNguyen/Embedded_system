@@ -1,5 +1,15 @@
 #include "driver_adc.h"
 #include "driver_dma.h"
+#include "driver_interrupt.h"
+
+static volatile uint32_t *adc_dma_value;
+static uint16_t adc_dma_previous_value;
+static bool adc_dma_has_previous_value;
+static Driver_ADC_ValueChangedCallback_t adc_value_changed_callback;
+
+void driver_adc_set_value_changed_callback(Driver_ADC_ValueChangedCallback_t callback) {
+    adc_value_changed_callback = callback;
+}
 
 /**
  * @brief Initialisiert das ADC1-Peripheriegerät inkl. Clock und Kalibrierung
@@ -47,7 +57,9 @@ void driver_adc_init(ADC_Prescaler_t prescaler) {
     // 1: Initialize calibration register.
     ADC1->CR2 |= ADC_CR2_RSTCAL;
 
-    while (ADC1->CR2 & ADC_CR2_RSTCAL) {
+    // NEU: Timeout-Schutz gegen Endlosschleife (Deadlock), falls RSTCAL nie zurückgesetzt wird
+    uint32_t timeout = 10000U;
+    while ((ADC1->CR2 & ADC_CR2_RSTCAL) && --timeout) {
         /* Warten, bis das Zurücksetzen der Kalibrierung abgeschlossen ist */
     }
 
@@ -57,7 +69,9 @@ void driver_adc_init(ADC_Prescaler_t prescaler) {
     // 0: Calibration completed
     // 1: Enable calibration
     ADC1->CR2 |= ADC_CR2_CAL;
-    while (ADC1->CR2 & ADC_CR2_CAL) {
+    // NEU: Timeout-Schutz gegen Endlosschleife (Deadlock), falls CAL nie zurückgesetzt wird
+    timeout = 10000U;
+    while ((ADC1->CR2 & ADC_CR2_CAL) && --timeout) {
         /* Warten, bis die Kalibrierung abgeschlossen ist */
     }
     /**
@@ -70,10 +84,11 @@ void driver_adc_init(ADC_Prescaler_t prescaler) {
     /* 6. Standard-Konfiguration: Rechtsbündige Datenausrichtung & Einzelwandlungsmodus */
     ADC1->CR2 &= ~(ADC_CR2_ALIGN | ADC_CR2_CONT);
     
-    /* 7. External Trigger aktivieren und Triggerquelle auf SWSTART (111 = Software Trigger) setzen */
+    /* NEU 7a. External Trigger aktivieren und Triggerquelle auf SWSTART (111 = Software Trigger) setzen */
+    ADC1->CR2 &= ~ADC_CR2_EXTSEL;
     ADC1->CR2 |= ADC_CR2_EXTTRIG | (7U << ADC_CR2_EXTSEL_Pos);
 
-    /* 8. Sequenzlänge auf 1 Wandlung setzen (L[3:0] = 0000 in SQR1) */
+    /* 7. Sequenzlänge auf 1 Wandlung setzen (L[3:0] = 0000 in SQR1) */
     ADC1->SQR1 &= ~ADC_SQR1_L;
 }
 
@@ -105,10 +120,12 @@ uint16_t driver_adc_read_channel(ADC_Channel_t channel) {
     /* 2. Clear EOC Flag (End of Conversion) */
     ADC1->SR &= ~ADC_SR_EOC;
 
-    /* 3. Wandlung durch Setzen von SWSTART & ADON starten */
-    ADC1->CR2 |= ADC_CR2_SWSTART | ADC_CR2_ADON;
+    /* 3. Wandlung durch Erneutes Setzen von ADON starten */
+    // NEU: zusätzlich SWSTART & EXTTRIG setzen, damit die Software-Wandlung wirklich startet
+    ADC1->CR2 |= (ADC_CR2_SWSTART | ADC_CR2_EXTTRIG | ADC_CR2_ADON);
 
-    /* 4. Warten, bis die Wandlung abgeschlossen ist (EOC == 1) mit Timeout-Schutz gegen Deadlock */
+    /* 4. Warten, bis die Wandlung abgeschlossen ist (EOC == 1) */
+    // NEU: Timeout-Schutz gegen Deadlock
     uint32_t timeout = 100000U;
     while (!(ADC1->SR & ADC_SR_EOC) && --timeout) {
         /* Warten auf EOC-Flag */
@@ -139,7 +156,21 @@ uint16_t driver_adc_read_avg(ADC_Channel_t channel, uint8_t samples) {
  * @param adc_value Zeiger auf den Speicherbereich (RAM)
  * @return Adresse des Speichers
  */
-uint32_t read_adc_dma(uint32_t *adc_value) {
+/**
+ * NEU: Der DMA-Kanal wird jetzt als Parameter übergeben (dynamisch).
+ * @param dma_channel DMA-Kanal für ADC1 (laut RM0008 Tabelle DMA1-Anforderungen nur DMA1_Channel1 gültig)
+ * @param adc_value   Zeiger auf den Speicherbereich (RAM), volatile da DMA im Hintergrund schreibt
+ * @return Adresse des Speichers, bzw. 0 bei ungültigem Kanal / NULL-Zeiger
+ */
+uint32_t read_adc_dma(DMA_Channel_TypeDef *dma_channel, volatile uint32_t *adc_value) {
+    // NEU: ADC1 kann nur über DMA1 Kanal 1 eine DMA-Anforderung auslösen (RM0008, DMA request mapping)
+    if (dma_channel == NULL || adc_value == NULL || dma_channel != DMA1_Channel1) {
+        return 0U;
+    }
+
+    /* Disable the request while replacing a possibly previous DMA setup. */
+    ADC1->CR2 &= ~(ADC_CR2_DMA | ADC_CR2_CONT);
+    driver_dma_stop(dma_channel);
     DMA_Config_t dma_config = {
         .periph_base_addr = (uint32_t)&(ADC1->DR),
         .mem_base_addr = (uint32_t)adc_value,
@@ -153,9 +184,21 @@ uint32_t read_adc_dma(uint32_t *adc_value) {
         .mode = DRIVER_DMA_MODE_CIRCULAR
     };
 
-    driver_dma_clock_enable(DMA1);
-    driver_dma_init(DMA1_Channel1, &dma_config);
-    driver_dma_start(DMA1_Channel1);
+    // NEU: DMA-Controller dynamisch aus der übergebenen Kanal-Adresse bestimmen (Kanäle von DMA1 liegen unterhalb DMA2_BASE)
+#ifdef DMA2
+    DMA_TypeDef *dma_controller = ((uint32_t)dma_channel >= (uint32_t)DMA2_BASE) ? DMA2 : DMA1;
+#else
+    DMA_TypeDef *dma_controller = DMA1;
+#endif
+    // NEU: ersetzt das fest codierte driver_dma_clock_enable(DMA1);
+    driver_dma_clock_enable(dma_controller);
+    driver_dma_init(dma_channel, &dma_config);
+    driver_dma_clear_flags(dma_controller, 1U);
+    dma_channel->CCR |= DMA_CCR_TCIE;
+    adc_dma_value = adc_value;
+    adc_dma_has_previous_value = false;
+    driver_interrupt_nvic_config(DMA1_Channel1_IRQn, 2U, 0U, true);
+    driver_dma_start(dma_channel);
 
     // 240/1136 RM0008 pdf
     // Bit 8 DMA: Direct memory access mode
@@ -170,5 +213,34 @@ uint32_t read_adc_dma(uint32_t *adc_value) {
     ADC1->CR2 |= ADC_CR2_CONT;
     // Bit 0 ADON: A/D-Wandler einschalten
     ADC1->CR2 |= ADC_CR2_ADON;
+    // NEU: Da in driver_adc_init EXTTRIG = 1 und EXTSEL = 111 (SWSTART) gesetzt wurde, startet ein erneutes ADON-Schreiben
+    // die Wandlung NICHT mehr. Der kontinuierliche Modus (CONT) muss daher per SWSTART (Bit 22) gestartet werden.
+    ADC1->CR2 |= ADC_CR2_SWSTART;
     return (uint32_t)adc_value;
+}
+
+/* DMA circular mode with CNDTR=1 generates TC after every completed sample. */
+void DMA1_Channel1_IRQHandler(void) {
+    if ((DMA1->ISR & DMA_ISR_TCIF1) == 0U) {
+        return;
+    }
+
+    driver_dma_clear_flags(DMA1, 1U);
+    if (adc_dma_value == NULL) {
+        return;
+    }
+
+    uint16_t value = (uint16_t)(*adc_dma_value & 0x0FFFU);
+    if (!adc_dma_has_previous_value) {
+        adc_dma_previous_value = value;
+        adc_dma_has_previous_value = true;
+        return;
+    }
+
+    if (value != adc_dma_previous_value) {
+        adc_dma_previous_value = value;
+        if (adc_value_changed_callback != NULL) {
+            adc_value_changed_callback(value);
+        }
+    }
 }

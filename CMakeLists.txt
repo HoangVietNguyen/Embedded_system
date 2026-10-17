@@ -97,9 +97,18 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     STM32_driver
 )
 
-# Create BIN and HEX files post build
+# 1. Ép file thực thi đầu ra mang đuôi mở rộng .elf
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+        SUFFIX ".elf"
+)
+
+# 2. Sinh tự động các file .bin, .hex và in kích thước bộ nhớ (Flash/RAM)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
-    COMMENT "Generating BIN and HEX binary output files..."
+        # Xuất file .hex
+        COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+        # Xuất file .bin
+        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+        # In thông số sử dụng Flash và RAM ra Terminal
+        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+        COMMENT "Building .hex, .bin and displaying memory footprint (.elf already built)..."
 )

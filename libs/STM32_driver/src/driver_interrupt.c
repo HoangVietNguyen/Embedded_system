@@ -89,6 +89,7 @@ __attribute__((weak)) void RCC_IRQHandler(void) {}
 __attribute__((weak)) void RTC_Alarm_IRQHandler(void) {}
 
 /* USART & UART Interrupt Vectors */
+/* USART1..3 handlers are implemented by driver_usart.c for RXNE callbacks. */
 __attribute__((weak)) void USART1_IRQHandler(void) {}
 __attribute__((weak)) void USART2_IRQHandler(void) {}
 __attribute__((weak)) void USART3_IRQHandler(void) {}
@@ -96,6 +97,8 @@ __attribute__((weak)) void UART4_IRQHandler(void) {}
 __attribute__((weak)) void UART5_IRQHandler(void) {}
 
 /* DMA Interrupt Vectors */
+/* DMA1_Channel1_IRQHandler is overridden by driver_adc.c for ADC1 DMA change
+ * notifications; the weak definition remains the fallback for other builds. */
 __attribute__((weak)) void DMA1_Channel1_IRQHandler(void) {}
 __attribute__((weak)) void DMA1_Channel2_IRQHandler(void) {}
 __attribute__((weak)) void DMA1_Channel3_IRQHandler(void) {}

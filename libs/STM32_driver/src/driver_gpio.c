@@ -11,6 +11,7 @@ else if ((PORT) == GPIOE) { RCC->APB2ENR |= RCC_APB2ENR_IOPEEN; } \
 } while (0)
 
 void driver_gpio_clock_enable(GPIO_TypeDef *port) {
+    RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
     DRIVER_GPIO_CLOCK_ENABLE(port);
 }
 

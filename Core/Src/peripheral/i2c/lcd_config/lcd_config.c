@@ -14,7 +14,7 @@ void lcd_send_cmd(char cmd) {
     driver_i2c_master_transmit(I2C1, LCD_ADDR, data_t, 4);
 }
 
-void lcd_send_data(char data) {
+void i2c_send_data(char data) {
     char data_u, data_l;
     uint8_t data_t[4];
     data_u = (data & 0xF0 );
@@ -56,5 +56,9 @@ void lcd_goto_xy(uint8_t row, uint8_t col) {
 }
 
 void lcd_send_string(char *str) {
-    while (*str) lcd_send_data(*str++);
+    while (*str) i2c_send_data(*str++);
+}
+
+void i2c_send_string(char *str) {
+    while (*str) i2c_send_data(*str++);
 }

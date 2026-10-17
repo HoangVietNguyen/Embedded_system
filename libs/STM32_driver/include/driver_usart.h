@@ -107,11 +107,25 @@ void driver_usart_send_char(USART_TypeDef *USARTx, char ch);
 void driver_usart_send_string(USART_TypeDef *USARTx, const char *str);
 char driver_usart_receive_char(USART_TypeDef *USARTx);
 
+/** Register a byte-received callback and enable RXNE interrupts for that USART.
+ * The callback runs inside the USART IRQ handler; keep it short. */
+typedef void (*Driver_USART_RxCallback_t)(USART_TypeDef *USARTx, uint8_t data);
+bool driver_usart_set_rx_callback(USART_TypeDef *USARTx, Driver_USART_RxCallback_t callback,
+                                 uint32_t preempt_priority, uint32_t sub_priority);
+
 DMA_Config_t create_config_dma_usart_tx(const char *str);
 void dma_usart_send_string(const char *str);
 
 DMA_Config_t create_config_dma_usart_rx(USART_TypeDef *USARTx, uint8_t *buffer, uint16_t length);
 bool dma_usart_receive_string(USART_TypeDef *USARTx, uint8_t *buffer, uint16_t length);
+
+/** Fixed-length DMA receive. Completion callback runs in the DMA IRQ context. */
+typedef void (*Driver_USART_DmaRxCallback_t)(USART_TypeDef *USARTx,
+                                              const uint8_t *buffer,
+                                              uint16_t length);
+bool dma_usart_receive_it(USART_TypeDef *USARTx, uint8_t *buffer, uint16_t length,
+                          Driver_USART_DmaRxCallback_t callback,
+                          uint32_t preempt_priority, uint32_t sub_priority);
 
 #ifdef __cplusplus
 }

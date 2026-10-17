@@ -26,7 +26,10 @@ void driver_dma_init(DMA_Channel_TypeDef *channel, const DMA_Config_t *config) {
     }
     // Der DMA-Kanal muss deaktiviert werden, bevor Werte in die Register CNDTR, CPAR und CMAR geschrieben werden
     // Page 287/1136 DMA_CCRx
-    channel->CCR &= ~DMA_CCR_EN;
+    channel->CCR &= ~(DMA_CCR_EN | DMA_CCR_DIR | DMA_CCR_MEM2MEM |
+                      DMA_CCR_PL | DMA_CCR_MSIZE | DMA_CCR_PSIZE |
+                      DMA_CCR_MINC | DMA_CCR_PINC | DMA_CCR_CIRC |
+                      DMA_CCR_HTIE | DMA_CCR_TCIE | DMA_CCR_TEIE);
     channel->CPAR = config->periph_base_addr;
     channel->CMAR = config->mem_base_addr;
     channel->CNDTR = config->data_length;
@@ -109,7 +112,8 @@ bool driver_dma_clear_flags(DMA_TypeDef *type_def, uint8_t channel_num) {
     }
 
     /* W1C: Schreiben von 1 in das entsprechende Bit im IFCR zum Löschen des Flags */
-    uint32_t shift_bit = (channel_num - 1) * 4 + 1;
+    uint32_t shift_bit = (channel_num - 1U) * 4U;
+    /* CGIFx clears GIF, TCIF, HTIF and TEIF for this channel (W1C). */
     type_def->IFCR = (1U << shift_bit);
     return true;
 }

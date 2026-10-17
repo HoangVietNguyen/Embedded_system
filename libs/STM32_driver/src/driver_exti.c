@@ -11,11 +11,11 @@ volatile uint8_t shift;
 
 #define GET_EXTI_REGISTER_NUMBER(PIN) \
 do { \
-shift = ((PIN) % 4U) * 4U; \
-if((PIN) <=3) { AFIO->EXTICR[0] &= ~(0xFU << shift); register_number = 0U; } \
-else if((PIN) <=7) { AFIO->EXTICR[1] &= ~(0xFU << shift); register_number = 1U; } \
-else if((PIN) <=11) { AFIO->EXTICR[2] &= ~(0xFU << shift); register_number = 2U; } \
-else { AFIO->EXTICR[3] &= ~(0xFU << shift); register_number = 3U;}\
+    shift = ((PIN) % 4U) * 4U; \
+    if((PIN) <=3) { AFIO->EXTICR[0] &= ~(0xFU << shift); register_number = 0U; } \
+    else if((PIN) <=7) { AFIO->EXTICR[1] &= ~(0xFU << shift); register_number = 1U; } \
+    else if((PIN) <=11) { AFIO->EXTICR[2] &= ~(0xFU << shift); register_number = 2U; } \
+    else { AFIO->EXTICR[3] &= ~(0xFU << shift); register_number = 3U;}\
 } while (0)
 
 // AFIO->EXTICR[]-Register:
@@ -26,10 +26,10 @@ else { AFIO->EXTICR[3] &= ~(0xFU << shift); register_number = 3U;}\
 
 #define PORT_SHIFT_BIT(PORT, PIN) \
 do { \
-if((PORT) == GPIOA) { AFIO->EXTICR[register_number] |= (0x0U << shift);} \
-else if((PORT) == GPIOB) { AFIO->EXTICR[register_number] |= (0x1U << shift); } \
-else if((PORT) == GPIOC) { AFIO->EXTICR[register_number] |= (0x2U << shift); } \
-else { AFIO->EXTICR[register_number] |= (0x3U << shift); }\
+    if((PORT) == GPIOA) { AFIO->EXTICR[register_number] |= (0x0U << shift);} \
+    else if((PORT) == GPIOB) { AFIO->EXTICR[register_number] |= (0x1U << shift); } \
+    else if((PORT) == GPIOC) { AFIO->EXTICR[register_number] |= (0x2U << shift); } \
+    else { AFIO->EXTICR[register_number] |= (0x3U << shift); }\
 } while (0)
 
 #define EVENT_PIN_CONFIG(TRIGGER, PIN) \
