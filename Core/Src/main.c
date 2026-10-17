@@ -45,7 +45,7 @@ int main(void)
     /* SPI1 master, 8-bit, MSB first, mode 0. PA4 is the manual chip select. */
     const SPI_Config_t spi_config = {
         .mode = DRIVER_SPI_MODE_MASTER,
-        .baudrate = DRIVER_SPI_BAUDRATE_DIV16,
+        .baudrate = DRIVER_SPI_BAUDRATE_DIV128,
         .cpol = DRIVER_SPI_CPOL_LOW,
         .cpha = DRIVER_SPI_CPHA_1EDGE,
         .data_frame = DRIVER_SPI_DFF_8BIT,
