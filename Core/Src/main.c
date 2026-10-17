@@ -17,6 +17,70 @@ static volatile uint8_t usart_rx_head;
 static volatile uint8_t usart_rx_tail;
 static uint8_t usart_rx_dma_byte;
 static volatile uint8_t usart_rx_restart_failed;
+static volatile uint8_t lcd_i2c_busy;
+static volatile uint8_t adc_lcd_pending;
+
+enum { LCD_COLUMNS = 16U, RX_TEXT_CAPACITY = 64U };
+static char rx_build_text[RX_TEXT_CAPACITY];
+static uint8_t rx_build_length;
+static char rx_display_text[RX_TEXT_CAPACITY];
+static uint8_t rx_display_length;
+static uint8_t rx_scroll_position;
+static uint8_t rx_display_dirty;
+static uint32_t rx_last_scroll_tick;
+
+static void lcd_write_adc_value(uint16_t value)
+{
+    char text[32];
+    lcd_goto_xy(0U, 0U);
+    snprintf(text, sizeof(text), "ADC value: %4u", (unsigned int)value);
+    i2c_send_string(text);
+}
+
+static void lcd_write_rx_line(void)
+{
+    uint16_t cycle_length = (rx_display_length > LCD_COLUMNS)
+        ? (uint16_t)rx_display_length + 3U
+        : LCD_COLUMNS;
+
+    lcd_goto_xy(1U, 0U);
+    for (uint8_t column = 0U; column < LCD_COLUMNS; ++column) {
+        char character = ' ';
+        if (rx_display_length <= LCD_COLUMNS) {
+            if (column < rx_display_length) character = rx_display_text[column];
+        } else {
+            uint16_t index = ((uint16_t)rx_scroll_position + column) % cycle_length;
+            if (index < rx_display_length) character = rx_display_text[index];
+        }
+        i2c_send_data(character);
+    }
+}
+
+/* Main context owns LCD writes; ADC IRQ defers its display update while this lock is held. */
+static void lcd_render_rx_line(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    lcd_i2c_busy = 1U;
+    __set_PRIMASK(primask);
+
+    lcd_write_rx_line();
+
+    for (;;) {
+        primask = __get_PRIMASK();
+        __disable_irq();
+        if (adc_lcd_pending != 0U) {
+            adc_lcd_pending = 0U;
+            uint16_t value = latest_adc_value;
+            __set_PRIMASK(primask);
+            lcd_write_adc_value(value);
+        } else {
+            lcd_i2c_busy = 0U;
+            __set_PRIMASK(primask);
+            break;
+        }
+    }
+}
 
 static void usart_dma_rx_callback(USART_TypeDef *USARTx,
                                   const uint8_t *buffer,
@@ -56,10 +120,13 @@ static void adc_value_changed(uint16_t value)
             ((uint32_t)(adc_val - 6U) * 70U) / (4070U - 6U);
         driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, (uint16_t)duty_percent);
 
-        char buffer[32];
-        lcd_goto_xy(0, 0);
-        snprintf(buffer, sizeof(buffer), "ADC value: %4u", (unsigned int)value);
-        i2c_send_string(buffer);
+        if (lcd_i2c_busy != 0U) {
+            adc_lcd_pending = 1U;
+        } else {
+            lcd_i2c_busy = 1U;
+            lcd_write_adc_value(value);
+            lcd_i2c_busy = 0U;
+        }
     }
 }
 
@@ -109,14 +176,43 @@ int main(void)
             Error_Handler();
         }
 
-        if (usart_rx_tail != usart_rx_head) {
+        while (usart_rx_tail != usart_rx_head) {
             uint8_t received = usart_rx_buffer[usart_rx_tail];
             usart_rx_tail = (uint8_t)((usart_rx_tail + 1U) % USART_RX_BUFFER_SIZE);
             /* Echo the received byte outside the interrupt handler. */
             driver_usart_send_char(USART1, (char)received);
+
+            if (received == '\r') {
+                continue;
+            }
+            if (received == '\n') {
+                rx_build_text[rx_build_length] = '\0';
+                for (uint8_t i = 0U; i <= rx_build_length; ++i) {
+                    rx_display_text[i] = rx_build_text[i];
+                }
+                rx_display_length = rx_build_length;
+                rx_build_length = 0U;
+                rx_scroll_position = 0U;
+                rx_display_dirty = 1U;
+                rx_last_scroll_tick = HAL_GetTick();
+            } else if (rx_build_length < (RX_TEXT_CAPACITY - 1U)) {
+                rx_build_text[rx_build_length++] = (char)received;
+            }
         }
 
-        HAL_Delay(20);
+        uint32_t now = HAL_GetTick();
+        if (rx_display_length > LCD_COLUMNS &&
+            (uint32_t)(now - rx_last_scroll_tick) >= 300U) {
+            uint8_t scroll_cycle = (uint8_t)(rx_display_length + 3U);
+            rx_scroll_position = (uint8_t)((rx_scroll_position + 1U) % scroll_cycle);
+            rx_last_scroll_tick = now;
+            rx_display_dirty = 1U;
+        }
+
+        if (rx_display_dirty != 0U) {
+            lcd_render_rx_line();
+            rx_display_dirty = 0U;
+        }
     }
 }
 
