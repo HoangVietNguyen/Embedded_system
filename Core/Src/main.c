@@ -6,8 +6,8 @@
 #include "driver_usart.h"
 #include "peripheral/rcc/rcc.h"
 
-static const uint8_t spi_message[] = "SPI1 test message\r\n";
-static const char usart_message[] = "USART1 DMA TX ready\r\n";
+static const uint8_t spi_message[] = "SPI1 DMA\r\n";
+static const char usart_message[] = "USART1 DMA\n";
 static volatile uint8_t usart_button_pressed;
 static volatile uint8_t spi_button_pressed;
 
@@ -77,8 +77,8 @@ int main(void)
 
         if (take_button_event(&spi_button_pressed) != 0U) {
             driver_spi_cs_low(GPIOA, 4U);
-            driver_spi_transmit(SPI1, spi_message,
-                                (uint16_t)(sizeof(spi_message) - 1U));
+            (void)driver_spi_transmit_dma(SPI1, spi_message,
+                                          (uint16_t)(sizeof(spi_message) - 1U));
             driver_spi_cs_high(GPIOA, 4U);
         }
 
