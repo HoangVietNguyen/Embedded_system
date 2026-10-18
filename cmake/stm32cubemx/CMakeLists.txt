@@ -4,7 +4,7 @@ enable_language(C ASM)
 # STM32CubeMX generated symbols (macros)
 set(MX_Defines_Syms 
 	USE_HAL_DRIVER 
-	STM32F103xB
+	STM32F103xE
     $<$<CONFIG:Debug>:DEBUG>
 )
 

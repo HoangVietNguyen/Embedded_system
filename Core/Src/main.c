@@ -1,359 +1,339 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 #include <stdio.h>
-#include <stdlib.h>
-#include "ICMax7219_driver/ICMax7219_driver.h"
-#include "spi_driver/spi_driver.h"
-#include "generate_piece_driver/pieces.h"
-#include "lcd_i2c_driver/lcd_i2c.h"
-#include "dht11_driver/dht11.h"
 
+#include "driver_adc.h"
+#include "peripheral/rcc/rcc.h"
+#include "driver_gpio.h"
+#include "driver_i2c.h"
+#include "driver_spi.h"
+#include "driver_tim.h"
+#include "driver_usart.h"
+#include "peripheral/i2c/lcd_config/lcd_config.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+static volatile uint16_t latest_adc_value;
+enum { USART_RX_BUFFER_SIZE = 64U, LCD_COLUMNS = 16U, RX_TEXT_CAPACITY = 64U };
+static volatile uint8_t usart_rx_buffer[USART_RX_BUFFER_SIZE];
+static volatile uint32_t usart_rx_order[USART_RX_BUFFER_SIZE];
+static volatile uint8_t usart_rx_head;
+static volatile uint8_t usart_rx_tail;
+static uint8_t usart_rx_dma_byte;
+static volatile uint8_t usart_rx_restart_failed;
+enum { SPI_RX_MESSAGE_LENGTH = 19U };
+static uint8_t spi_rx_dma_buffer[SPI_RX_MESSAGE_LENGTH];
+static volatile char spi_rx_pending_text[RX_TEXT_CAPACITY];
+static volatile uint8_t spi_rx_pending_length;
+static volatile uint8_t spi_rx_pending;
+static volatile uint32_t spi_rx_pending_order;
+static volatile char usart_pending_text[RX_TEXT_CAPACITY];
+static volatile uint8_t usart_pending_length;
+static volatile uint8_t usart_pending;
+static volatile uint32_t usart_pending_order;
+static volatile uint32_t receive_event_order;
+static volatile uint8_t spi_rx_restart_failed;
+static volatile uint8_t lcd_i2c_busy;
+static volatile uint8_t adc_lcd_pending;
 
-/* USER CODE END Includes */
+static char rx_build_text[RX_TEXT_CAPACITY];
+static uint8_t rx_build_length;
+static char rx_display_text[RX_TEXT_CAPACITY];
+static uint8_t rx_display_length;
+static uint8_t rx_scroll_position;
+static uint8_t rx_display_dirty;
+static uint32_t rx_last_scroll_tick;
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-
-TIM_HandleTypeDef htim1;
-volatile uint16_t hight_score  = 0;
-
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-// static void MX_SPI1_Init(void);
-static void MX_TIM1_Init(void);
-void MX_I2C1_Init(void);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
-
-extern SPI_HandleTypeDef hspi1; // gọi cấu hình spi trong spi_driver.c
-
-// hàm click button, khối hình dịch sang trái hoặc phảo
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN) {
-  if (GPIO_PIN == BUTTON_SHIFT_LEFT_Pin) {
-    MAX7219_Shift_Left_Pieces();
-  }
-
-  if (GPIO_PIN == BUTTON_SHIFT_RIGHT_Pin) {
-    MAX7219_Shift_Right_Pieces();
-  }
-
+static uint32_t next_receive_event_order(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    uint32_t order = ++receive_event_order;
+    __set_PRIMASK(primask);
+    return order;
 }
 
-//hàm interrupt bắt sự kiện đếm hết 500ms, tạo ra một hình khối
- void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
- {
-   if (htim->Instance == TIM1 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
-   {
-     MAX7219_Generate_Pieces();
-   }
- }
+static void lcd_write_adc_value(uint16_t value)
+{
+    char text[32];
+    lcd_goto_xy(0U, 0U);
+    snprintf(text, sizeof(text), "ADC value: %4u", (unsigned int)value);
+    i2c_send_string(text);
+}
 
-//interrupt mỗi 500ms, dịch khối hình xuống một nấc
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-  if (htim ->Instance == TIM1) {
-    MAX7219_Shift_Down_Pieces();
-  }
+static void lcd_write_rx_line(void)
+{
+    uint16_t cycle_length = (rx_display_length > LCD_COLUMNS)
+        ? (uint16_t)rx_display_length + 3U
+        : LCD_COLUMNS;
+
+    lcd_goto_xy(1U, 0U);
+    for (uint8_t column = 0U; column < LCD_COLUMNS; ++column) {
+        char character = ' ';
+        if (rx_display_length <= LCD_COLUMNS) {
+            if (column < rx_display_length) character = rx_display_text[column];
+        } else {
+            uint16_t index = ((uint16_t)rx_scroll_position + column) % cycle_length;
+            if (index < rx_display_length) character = rx_display_text[index];
+        }
+        i2c_send_data(character);
+    }
+}
+
+/* Main context owns LCD writes; ADC IRQ defers its display update while this lock is held. */
+static void lcd_render_rx_line(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    lcd_i2c_busy = 1U;
+    __set_PRIMASK(primask);
+
+    lcd_write_rx_line();
+
+    for (;;) {
+        primask = __get_PRIMASK();
+        __disable_irq();
+        if (adc_lcd_pending != 0U) {
+            adc_lcd_pending = 0U;
+            uint16_t value = latest_adc_value;
+            __set_PRIMASK(primask);
+            lcd_write_adc_value(value);
+        } else {
+            lcd_i2c_busy = 0U;
+            __set_PRIMASK(primask);
+            break;
+        }
+    }
+}
+
+static void usart_dma_rx_callback(USART_TypeDef *USARTx,
+                                  const uint8_t *buffer,
+                                  uint16_t length)
+{
+    for (uint16_t i = 0U; i < length; ++i) {
+        uint8_t next = (uint8_t)((usart_rx_head + 1U) % USART_RX_BUFFER_SIZE);
+        if (next != usart_rx_tail) {
+            usart_rx_buffer[usart_rx_head] = buffer[i];
+            usart_rx_order[usart_rx_head] = next_receive_event_order();
+            usart_rx_head = next;
+        }
+    }
+
+    /* One-byte DMA transfer: arm the next RX byte before leaving the DMA ISR. */
+    if (!dma_usart_receive_it(USARTx, &usart_rx_dma_byte, 1U,
+                              usart_dma_rx_callback, 1U, 0U)) {
+        usart_rx_restart_failed = 1U;
+    }
+}
+
+static void spi_dma_rx_callback(SPI_TypeDef *SPIx,
+                                const uint8_t *buffer,
+                                uint16_t length)
+{
+    uint8_t text_length = 0U;
+    for (uint16_t i = 0U; i < length && text_length < (RX_TEXT_CAPACITY - 1U); ++i) {
+        if (buffer[i] != '\r' && buffer[i] != '\n') {
+            spi_rx_pending_text[text_length++] = (char)buffer[i];
+        }
+    }
+    spi_rx_pending_text[text_length] = '\0';
+    spi_rx_pending_length = text_length;
+    spi_rx_pending_order = next_receive_event_order();
+    spi_rx_pending = 1U;
+
+    /* Rearm the fixed-length SPI1 RX DMA transfer for the next button-triggered message. */
+    if (!dma_spi_receive_it(SPIx, spi_rx_dma_buffer, SPI_RX_MESSAGE_LENGTH,
+                            spi_dma_rx_callback, 1U, 0U)) {
+        spi_rx_restart_failed = 1U;
+    }
+}
+
+static void display_newest_received_message(void)
+{
+    char text[RX_TEXT_CAPACITY];
+    uint8_t text_length = 0U;
+    uint8_t have_message = 0U;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    if (spi_rx_pending != 0U && usart_pending != 0U) {
+        uint8_t spi_is_newer = (int32_t)(spi_rx_pending_order - usart_pending_order) > 0;
+        volatile char *source = spi_is_newer ? spi_rx_pending_text : usart_pending_text;
+        text_length = spi_is_newer ? spi_rx_pending_length : usart_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = source[i];
+        }
+        spi_rx_pending = 0U;
+        usart_pending = 0U;
+        have_message = 1U;
+    } else if (spi_rx_pending != 0U) {
+        text_length = spi_rx_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = spi_rx_pending_text[i];
+        }
+        spi_rx_pending = 0U;
+        have_message = 1U;
+    } else if (usart_pending != 0U) {
+        text_length = usart_pending_length;
+        for (uint8_t i = 0U; i < text_length; ++i) {
+            text[i] = usart_pending_text[i];
+        }
+        usart_pending = 0U;
+        have_message = 1U;
+    }
+
+    __set_PRIMASK(primask);
+
+    if (have_message != 0U) {
+        text[text_length] = '\0';
+        for (uint8_t i = 0U; i <= text_length; ++i) {
+            rx_display_text[i] = text[i];
+        }
+        rx_display_length = text_length;
+        rx_scroll_position = 0U;
+        rx_display_dirty = 1U;
+        rx_last_scroll_tick = HAL_GetTick();
+    }
+}
+
+//bắt sự kiện thay đổi giá trị ADC
+static void adc_value_changed(uint16_t value)
+{
+    uint16_t previous = latest_adc_value;
+    uint16_t difference = (value >= previous) ? (value - previous) : (previous - value);
+    if (difference > 50U) {
+        latest_adc_value = value;
+
+        uint16_t adc_val = value;
+        if (adc_val < 6U) {
+            adc_val = 6U;
+        } else if (adc_val > 4070U) {
+            adc_val = 4070U;
+        }
+
+        uint32_t duty_percent = 20U +
+            ((uint32_t)(adc_val - 6U) * 70U) / (4070U - 6U);
+        driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, (uint16_t)duty_percent);
+
+        if (lcd_i2c_busy != 0U) {
+            adc_lcd_pending = 1U;
+        } else {
+            lcd_i2c_busy = 1U;
+            lcd_write_adc_value(value);
+            lcd_i2c_busy = 0U;
+        }
+    }
 }
 
 int main(void)
 {
+    HAL_Init();
+    SystemClock_Config();
 
-  /* USER CODE BEGIN 1 */
+    /* 1. Kích hoạt Clock Port A và Port B bằng Bare-Metal Driver */
+    driver_gpio_clock_enable(GPIOA);
+    driver_gpio_clock_enable(GPIOB);
 
-  /* USER CODE END 1 */
+    /* 2. Cấu hình chân PA0 làm ngõ vào Analog cho Biến trở (ADC1_IN0) */
+    driver_gpio_init_pin(GPIOA, 0, GPIO_MODE_INPUT_ANALOG);
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* 3. Cấu hình chân PB6 làm Alternate Function Push-Pull cho PWM (TIM4_CH1) */
+    driver_gpio_init_pin(GPIOB, 6, GPIO_MODE_AF_PP_50MHZ);
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* 5. Khởi tạo PWM TIM4 Kanal 1 (PB6) tần số 10kHz (PSC = 71, ARR = 99 -> Chu kỳ T = 100us) */
+    driver_tim_pwm_init(TIM4, TIM_CHANNEL_1, 71, 99);
 
-  /* USER CODE BEGIN Init */
+    driver_adc_init(DRIVER_ADC_PRESCALER_DIV6);
+    driver_adc_config_channel(ADC_CHANNEL_0, DRIVER_ADC_SAMPLETIME_239CYCLES5);
+    static volatile uint32_t adc_value = 0;
 
-  /* USER CODE END Init */
+    /* USART1 bare-metal RX: 9600 baud, 8N1. */
+    driver_usart_init_simple(USART1, 9600U);
+    if (!dma_usart_receive_it(USART1, &usart_rx_dma_byte, 1U,
+                              usart_dma_rx_callback, 1U, 0U)) {
+        Error_Handler();
+    }
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* SPI1 slave receives the sender's fixed 19-byte message with DMA1 Channel 2. */
+    const SPI_Config_t spi_config = {
+        .mode = DRIVER_SPI_MODE_SLAVE,
+        .baudrate = DRIVER_SPI_BAUDRATE_DIV16,
+        .cpol = DRIVER_SPI_CPOL_LOW,
+        .cpha = DRIVER_SPI_CPHA_1EDGE,
+        .data_frame = DRIVER_SPI_DFF_8BIT,
+        .first_bit = DRIVER_SPI_FIRSTBIT_MSB
+    };
+    driver_spi_init(SPI1, &spi_config);
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_SPI1_Init();
-  MX_TIM1_Init();
-  MX_I2C1_Init();
-  HAL_TIM_Base_Start_IT(&htim1);
-  HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
-  /* USER CODE BEGIN 2 */
-  lcd_init();
-  char high_score_data[16];
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  /* USER CODE BEGIN 2 */
-  MAX7219_Init_System();       // Khởi tạo phần cứng IC
-  /* USER CODE END 2 */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-    sprintf(high_score_data, "High score: %04d", hight_score);
+    /* I2C/LCD must be ready before ADC interrupts can call the callback. */
+    init_i2c_modul(I2C1, I2C_SPEED_FAST_400KHz);
+    lcd_init();
     lcd_goto_xy(0, 0);
-    lcd_send_string(high_score_data);
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+
+    driver_tim_pwm_set_compare(TIM4, TIM_CHANNEL_1, 20U);
+
+    if (!dma_spi_receive_it(SPI1, spi_rx_dma_buffer, SPI_RX_MESSAGE_LENGTH,
+                            spi_dma_rx_callback, 1U, 0U)) {
+        Error_Handler();
+    }
+
+    driver_adc_set_value_changed_callback(adc_value_changed);
+    read_adc_dma(DMA1_Channel1, &adc_value);
+
+
+    while (1)
+    {
+        if (usart_rx_restart_failed != 0U) {
+            Error_Handler();
+        }
+        if (spi_rx_restart_failed != 0U) {
+            Error_Handler();
+        }
+
+        while (usart_rx_tail != usart_rx_head) {
+            uint8_t received = usart_rx_buffer[usart_rx_tail];
+            uint32_t received_order = usart_rx_order[usart_rx_tail];
+            usart_rx_tail = (uint8_t)((usart_rx_tail + 1U) % USART_RX_BUFFER_SIZE);
+            /* Echo the received byte outside the interrupt handler. */
+            driver_usart_send_char(USART1, (char)received);
+
+            if (received == '\r') {
+                continue;
+            }
+            if (received == '\n') {
+                rx_build_text[rx_build_length] = '\0';
+                for (uint8_t i = 0U; i <= rx_build_length; ++i) {
+                    usart_pending_text[i] = rx_build_text[i];
+                }
+                usart_pending_length = rx_build_length;
+                usart_pending_order = received_order;
+                usart_pending = 1U;
+                rx_build_length = 0U;
+            } else if (rx_build_length < (RX_TEXT_CAPACITY - 1U)) {
+                rx_build_text[rx_build_length++] = (char)received;
+            }
+        }
+
+        display_newest_received_message();
+
+        uint32_t now = HAL_GetTick();
+        if (rx_display_length > LCD_COLUMNS &&
+            (uint32_t)(now - rx_last_scroll_tick) >= 300U) {
+            uint8_t scroll_cycle = (uint8_t)(rx_display_length + 3U);
+            rx_scroll_position = (uint8_t)((rx_scroll_position + 1U) % scroll_cycle);
+            rx_last_scroll_tick = now;
+            rx_display_dirty = 1U;
+        }
+
+        if (rx_display_dirty != 0U) {
+            lcd_render_rx_line();
+            rx_display_dirty = 0U;
+        }
+    }
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-
-
-// MX_SPI1_Init is now implemented in ICMax7219_driver.c
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 7199;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 9999;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-  HAL_TIM_MspPostInit(&htim1);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED_TEST_Pin|GPIO_PIN_6, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : LED_TEST_Pin PA6 */
-  GPIO_InitStruct.Pin = LED_TEST_Pin|GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BUTTON_SHIFT_LEFT_Pin BUTTON_SHIFT_RIGHT_Pin */
-  GPIO_InitStruct.Pin = BUTTON_SHIFT_LEFT_Pin|BUTTON_SHIFT_RIGHT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
-}
-
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
-
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+    __disable_irq();
+    while (1)
+    {
+    }
 }
-#ifdef USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
-}
-#endif /* USE_FULL_ASSERT */

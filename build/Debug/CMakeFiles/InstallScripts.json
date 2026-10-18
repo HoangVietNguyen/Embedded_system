@@ -1,8 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/Users/nguyenhoangviet/Desktop/STM32Project/MatrixLEDSPI/build/Debug/cmake_install.cmake",
-		"/Users/nguyenhoangviet/Desktop/STM32Project/MatrixLEDSPI/build/Debug/cmake/stm32cubemx/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
