@@ -120,6 +120,14 @@ uint8_t driver_spi_transmit_receive_byte(SPI_TypeDef *SPIx, uint8_t tx_data);
 void driver_spi_transmit(SPI_TypeDef *SPIx, const uint8_t *data, uint16_t size);
 
 /**
+ * @brief Sends a byte buffer over SPI1 using DMA1 Channel 3 (blocking).
+ * @param SPIx SPI instance; currently only SPI1 is supported by DMA.
+ * @param data Source buffer in RAM.
+ * @param size Number of bytes to send.
+ */
+bool driver_spi_transmit_dma(SPI_TypeDef *SPIx, const uint8_t *data, uint16_t size);
+
+/**
  * @brief Empfängt einen Datenpuffer über SPI durch Senden von Dummy-Bytes (0xFF)
  * @param SPIx Zeiger auf das SPI-Register
  * @param data Zeiger auf den Puffer zum Speichern der empfangenen Daten

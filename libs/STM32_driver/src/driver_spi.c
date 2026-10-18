@@ -133,6 +133,59 @@ void driver_spi_transmit(SPI_TypeDef *SPIx, const uint8_t *data, uint16_t size) 
     while (SPIx->SR & SPI_SR_BSY);
 }
 
+bool driver_spi_transmit_dma(SPI_TypeDef *SPIx, const uint8_t *data, uint16_t size)
+{
+    if (SPIx != SPI1 || data == NULL || size == 0U ||
+        (SPIx->CR1 & SPI_CR1_DFF) != 0U ||
+        (SPIx->CR1 & SPI_CR1_MSTR) == 0U) {
+        return false;
+    }
+
+    DMA_Config_t config = {
+        .periph_base_addr = (uint32_t)&SPI1->DR,
+        .mem_base_addr = (uint32_t)data,
+        .data_length = size,
+        .direction = DRIVER_DMA_DIR_MEM_TO_PERIPH,
+        .periph_data_size = DRIVER_DMA_DATA_SIZE_8BIT,
+        .mem_data_size = DRIVER_DMA_DATA_SIZE_8BIT,
+        .periph_inc_enable = false,
+        .mem_inc_enable = true,
+        .priority = DRIVER_DMA_PRIORITY_HIGH,
+        .mode = DRIVER_DMA_MODE_NORMAL
+    };
+
+    driver_dma_clock_enable(DMA1);
+    driver_dma_stop(DMA1_Channel3);
+    driver_dma_clear_flags(DMA1, 3U);
+    driver_dma_init(DMA1_Channel3, &config);
+
+    /* Clear stale receive/overrun state before enabling the transmit request. */
+    if ((SPI1->SR & (SPI_SR_RXNE | SPI_SR_OVR)) != 0U) {
+        (void)*(volatile uint8_t *)&SPI1->DR;
+        (void)SPI1->SR;
+    }
+
+    SPI1->CR2 |= SPI_CR2_TXDMAEN;
+    driver_dma_start(DMA1_Channel3);
+
+    while (!driver_dma_is_transfer_complete(DMA1, 3U)) {
+    }
+    while ((SPI1->SR & SPI_SR_BSY) != 0U) {
+    }
+
+    driver_dma_stop(DMA1_Channel3);
+    SPI1->CR2 &= ~SPI_CR2_TXDMAEN;
+    driver_dma_clear_flags(DMA1, 3U);
+
+    /* SPI is full duplex: discard received bytes and clear any OVR condition. */
+    if ((SPI1->SR & (SPI_SR_RXNE | SPI_SR_OVR)) != 0U) {
+        (void)*(volatile uint8_t *)&SPI1->DR;
+        (void)SPI1->SR;
+    }
+
+    return true;
+}
+
 void driver_spi_receive(SPI_TypeDef *SPIx, uint8_t *data, uint16_t size) {
     if (SPIx == NULL || data == NULL || size == 0U) {
         return;
