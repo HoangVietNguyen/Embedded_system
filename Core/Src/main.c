@@ -3,6 +3,7 @@
 #include "driver_exti.h"
 #include "driver_gpio.h"
 #include "driver_spi.h"
+#include "driver_tim.h"
 #include "driver_usart.h"
 #include "peripheral/rcc/rcc.h"
 
@@ -53,6 +54,12 @@ int main(void)
     };
     driver_spi_init(SPI1, &spi_config);
     driver_spi_cs_high(GPIOA, 4U);
+
+    /* TIM1_CH1 outputs a continuous 10 kHz, 50% square wave on PA8. */
+    driver_gpio_clock_enable(GPIOA);
+    driver_tim_set_remap(TIM1, DRIVER_TIM_REMAP_NONE);
+    driver_tim_pwm_init(TIM1, DRIVER_TIM_CHANNEL_1, 71U, 99U);
+    driver_tim_pwm_set_compare(TIM1, DRIVER_TIM_CHANNEL_1, 50U);
 
     /* USART1 TX only, 9600 baud, 8 data bits, no parity, 1 stop bit. */
     driver_usart_clock_enable(USART1);
